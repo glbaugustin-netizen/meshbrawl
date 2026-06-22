@@ -1,0 +1,569 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import Button from "@/components/Button";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Game = Record<string, any>;
+
+interface GamePlayer {
+  id:      string;
+  user_id: string;
+  status:  string;
+  users: { pseudo: string } | null;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatTime(s: number): string {
+  const h   = Math.floor(s / 3600);
+  const m   = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return [h, m, sec].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function JeuPage() {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const gameId       = searchParams.get('gameId');
+  const supabase     = createClient();
+
+  const [game,       setGame]       = useState<Game | null>(null);
+  const [players,    setPlayers]    = useState<GamePlayer[]>([]);
+  const [timeLeft,   setTimeLeft]   = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [file,       setFile]       = useState<File | null>(null);
+  const [uploading,  setUploading]  = useState(false);
+  const [submitted,  setSubmitted]  = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef  = useRef<HTMLInputElement>(null);
+  const timerStarted  = useRef(false);
+  const redirectedRef = useRef(false);
+
+  // Charge la partie
+  useEffect(() => {
+    if (!gameId) return;
+
+    async function loadGame() {
+      const { data } = await supabase
+        .from('games')
+        .select('*')
+        .eq('id', gameId)
+        .single();
+      if (!data) return;
+      setGame(data);
+      const endsAt = new Date(data.ends_at).getTime();
+      const secs   = Math.max(0, Math.floor((endsAt - Date.now()) / 1000));
+      setTimeLeft(secs);
+    }
+
+    async function loadPlayers() {
+      const { data } = await supabase
+        .from('game_players')
+        .select('id, user_id, status, users(pseudo)')
+        .eq('game_id', gameId);
+      setPlayers((data as unknown as GamePlayer[]) || []);
+    }
+
+    loadGame();
+    loadPlayers();
+
+    const channel = supabase
+      .channel(`jeu:${gameId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public',
+        table: 'game_players',
+        filter: `game_id=eq.${gameId}`,
+      }, () => loadPlayers())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId]);
+
+  // Chrono
+  useEffect(() => {
+    if (timeLeft <= 0 || timerStarted.current) return;
+    timerStarted.current = true;
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timeLeft]);
+
+  // Redirige quand le temps est écoulé
+  useEffect(() => {
+    if (timeLeft === 0 && gameId && !redirectedRef.current) {
+      redirectedRef.current = true;
+      router.push(`/vote?gameId=${gameId}`);
+    }
+  }, [timeLeft, gameId, router]);
+
+  // Redirige quand tous ont soumis
+  useEffect(() => {
+    if (players.length === 0 || !gameId || redirectedRef.current) return;
+    const allSubmitted = players.every((p) => p.status === 'submitted');
+    if (allSubmitted) {
+      redirectedRef.current = true;
+      router.push(`/vote?gameId=${gameId}`);
+    }
+  }, [players, gameId, router]);
+
+  // Upload
+  const handleUpload = async (f: File) => {
+    setUploadError('');
+    const isVideo = f.type.startsWith('video/');
+    const isGLB   = f.name.toLowerCase().endsWith('.glb');
+    if (!isVideo && !isGLB) {
+      setUploadError('Fichier invalide — .glb ou vidéo uniquement');
+      return;
+    }
+    setFile(f);
+  };
+
+  const handleSubmit = async () => {
+    if (!file || !gameId || submitted) return;
+    setUploading(true);
+    setUploadError('');
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setUploading(false); return; }
+
+    const isVideo  = file.type.startsWith('video/');
+    const filePath = `${gameId}/${session.user.id}/${file.name}`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from('submissions')
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadErr) {
+      setUploadError('Erreur upload : ' + uploadErr.message);
+      setUploading(false);
+      return;
+    }
+
+    const { data: urlData } = await supabase.storage
+      .from('submissions')
+      .createSignedUrl(filePath, 60 * 60 * 24);
+
+    await supabase
+      .from('game_players')
+      .update({
+        status:          'submitted',
+        submission_url:  urlData?.signedUrl ?? '',
+        submission_type: isVideo ? 'video' : 'glb',
+      })
+      .eq('game_id', gameId)
+      .eq('user_id', session.user.id);
+
+    setSubmitted(true);
+    setUploading(false);
+  };
+
+  const handleDragOver  = (e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragOver(false); };
+  const handleDrop      = (e: React.DragEvent) => {
+    e.preventDefault(); setIsDragOver(false);
+    const f = e.dataTransfer.files[0];
+    if (f) handleUpload(f);
+  };
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) handleUpload(f);
+  };
+
+  const isUrgent       = timeLeft > 0 && timeLeft < 300;
+  const submittedCount = players.filter((p) => p.status === 'submitted').length;
+
+  if (!gameId) {
+    return (
+      <main className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4">
+        <p className="font-archivo-black text-[#1a1a1a] uppercase tracking-widest text-sm">
+          Partie introuvable.
+        </p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-[calc(100vh-64px)] px-4 py-10">
+      <div className="max-w-6xl mx-auto flex flex-col gap-8">
+
+        {/* ── Timer ── */}
+        <div className="flex justify-center">
+          <div
+            className="px-10 py-5 flex flex-col items-center gap-1"
+            style={{ backgroundColor: "#1a1a1a", border: "5px solid #1a1a1a", borderRadius: "16px", boxShadow: "6px 6px 0 #1a1a1a" }}
+          >
+            <span
+              className="font-archivo-black text-xs uppercase tracking-widest"
+              style={{ color: isUrgent ? "#ff2e2e" : "#ffd400", opacity: 0.6 }}
+            >
+              TEMPS RESTANT
+            </span>
+            <span
+              className="font-bangers tabular-nums leading-none tracking-widest transition-colors duration-300"
+              style={{
+                fontSize: "72px",
+                color: isUrgent ? "#ff2e2e" : "#ffd400",
+                textShadow: isUrgent ? "3px 3px 0 #7a0000" : "3px 3px 0 #7a6300",
+              }}
+            >
+              {formatTime(timeLeft)}
+            </span>
+          </div>
+        </div>
+
+        {/* ── Main layout ── */}
+        <div className="grid lg:grid-cols-[2fr_1fr] gap-8 items-start">
+
+          {/* ── Left column ── */}
+          <div className="flex flex-col gap-8">
+
+            {/* Brief bubble */}
+            {game && (
+              <div>
+                <div
+                  className="relative bg-white border-[5px] border-[#1a1a1a] rounded-[16px] p-6"
+                  style={{ boxShadow: "6px 6px 0 #1a1a1a" }}
+                >
+                  <p className="font-archivo-black text-[#1a1a1a]/50 text-xs uppercase tracking-widest mb-3">
+                    VOTRE BRIEF :
+                  </p>
+
+                  <BriefContent game={game} />
+
+                  {/* Bubble tail — outer */}
+                  <div style={{ position: "absolute", bottom: -22, left: 40, width: 0, height: 0, borderLeft: "20px solid transparent", borderRight: "20px solid transparent", borderTop: "22px solid #1a1a1a" }} />
+                  {/* Bubble tail — inner */}
+                  <div style={{ position: "absolute", bottom: -14, left: 40, width: 0, height: 0, borderLeft: "14px solid transparent", borderRight: "14px solid transparent", borderTop: "14px solid #ffffff" }} />
+                </div>
+                <div className="h-6" />
+
+                {/* Asset buttons */}
+                <AssetButtons game={game} />
+              </div>
+            )}
+
+            {/* Drop zone */}
+            <div>
+              <p className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a] mb-3">
+                TON RENDU :
+              </p>
+
+              {submitted ? (
+                <div
+                  className="flex flex-col items-center justify-center gap-4 rounded-[16px] p-10"
+                  style={{ backgroundColor: "#f0fff7", border: "3px dashed #0aa36b" }}
+                >
+                  <IconCheck />
+                  <p className="font-bangers uppercase tracking-widest text-[#0aa36b] text-center" style={{ fontSize: "28px" }}>
+                    RENDU SOUMIS !
+                  </p>
+                  <p className="font-archivo-black text-sm uppercase tracking-wide text-[#0aa36b]/70 text-center">
+                    En attente des autres brawlers...
+                  </p>
+                </div>
+              ) : (
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className="flex flex-col items-center justify-center gap-4 rounded-[16px] p-10 transition-all duration-150 cursor-default"
+                  style={{
+                    backgroundColor: isDragOver ? "#fff0f0" : file ? "#f0fff7" : "#fff7cc",
+                    border: `3px dashed ${isDragOver ? "#ff2e2e" : file ? "#0aa36b" : "#b9a300"}`,
+                  }}
+                >
+                  {file ? (
+                    <>
+                      <IconCheck />
+                      <p className="font-archivo-black text-[#0aa36b] text-base uppercase tracking-wide text-center">
+                        {file.name}
+                      </p>
+                      <p className="font-archivo text-xs text-[#0aa36b]/70 text-center" style={{ fontWeight: 600 }}>
+                        {(file.size / 1024 / 1024).toFixed(2)} MB — Fichier prêt
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setFile(null)}
+                        className="font-archivo-black text-xs uppercase tracking-wide text-[#ff2e2e] underline underline-offset-2 hover:opacity-70 transition-opacity"
+                      >
+                        Retirer
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <IconUpload dimmed={!isDragOver} />
+                      <p className="font-archivo-black uppercase tracking-wide text-center" style={{ color: isDragOver ? "#ff2e2e" : "#b9a300" }}>
+                        {isDragOver ? "LACHE TON FICHIER !" : "GLISSE TON FICHIER ICI"}
+                      </p>
+                      <p className="font-archivo text-xs text-center" style={{ color: "#b9a300", fontWeight: 500 }}>
+                        .glb ou vidéo • max 20MB
+                      </p>
+                      <Button
+                        variant="secondary"
+                        className="!text-sm !px-5 !py-2 !rounded-[10px] !border-[3px] !shadow-[0_4px_0_#1a1a1a] hover:!shadow-[0_7px_0_#1a1a1a]"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        PARCOURIR
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {uploadError && (
+                <p className="font-archivo-black text-xs uppercase tracking-wide text-[#ff2e2e] mt-2">
+                  {uploadError}
+                </p>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".glb,video/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+
+            {/* Submit */}
+            {!submitted && (
+              <div className="flex flex-col items-start gap-3">
+                <Button
+                  variant="primary"
+                  disabled={!file || uploading}
+                  onClick={handleSubmit}
+                  className="!text-2xl !px-10 !py-3 !rounded-[14px] !shadow-[0_8px_0_#1a1a1a] hover:!shadow-[0_11px_0_#1a1a1a] hover:!-translate-y-[3px] active:!shadow-[0_2px_0_#1a1a1a] disabled:!opacity-40 disabled:!cursor-not-allowed disabled:!translate-y-0 disabled:!shadow-[0_8px_0_#1a1a1a]"
+                >
+                  {uploading ? (
+                    <span className="flex items-center gap-3">
+                      <span className="inline-block w-5 h-5 border-[3px] border-[#ffd400] border-t-transparent rounded-full animate-spin" />
+                      ENVOI EN COURS...
+                    </span>
+                  ) : (
+                    "SOUMETTRE MON RENDU"
+                  )}
+                </Button>
+                {!file && (
+                  <p className="font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a]/40">
+                    Dépose ton fichier .glb ou vidéo pour activer la soumission
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Sidebar — Player statuses ── */}
+          <aside
+            className="bg-white border-[5px] border-[#1a1a1a] rounded-[16px] p-5 lg:sticky lg:top-[84px]"
+            style={{ boxShadow: "4px 4px 0 #1a1a1a" }}
+          >
+            <h2 className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a] mb-4 pb-3 border-b-[3px] border-[#1a1a1a]">
+              BRAWLERS — {submittedCount}/{players.length} SOUMIS
+            </h2>
+            <ul className="flex flex-col gap-3">
+              {players.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3">
+                  <span className="font-archivo-black text-sm text-[#1a1a1a] truncate">
+                    {p.users?.pseudo || '???'}
+                  </span>
+                  <StatusPill status={p.status} />
+                </li>
+              ))}
+              {players.length === 0 && (
+                <li className="font-archivo text-xs text-[#1a1a1a]/40 uppercase tracking-widest" style={{ fontWeight: 600 }}>
+                  Chargement...
+                </li>
+              )}
+            </ul>
+          </aside>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+// ─── Brief content ────────────────────────────────────────────────────────────
+
+function BriefContent({ game }: { game: Game }) {
+  const mode = game.mode as string;
+
+  if (mode === 'imaginaire') {
+    return (
+      <>
+        <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none mb-4" style={{ fontSize: "42px" }}>
+          {(game.brief_objet as string || '???').toUpperCase()}
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {game.brief_style && <BriefBadge bg="#2e6bff" color="#fff">{(game.brief_style as string).toUpperCase()}</BriefBadge>}
+          {game.brief_contrainte && <BriefBadge bg="#ff9500" color="#1a1a1a">{(game.brief_contrainte as string).toUpperCase()}</BriefBadge>}
+          <BriefBadge bg="#ffd400" color="#1a1a1a">IMAGINAIRE</BriefBadge>
+        </div>
+      </>
+    );
+  }
+
+  if (mode === 'texturing') {
+    return (
+      <>
+        <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none mb-4" style={{ fontSize: "36px" }}>
+          TEXTURE CET OBJET
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {game.brief_style && <BriefBadge bg="#2e6bff" color="#fff">{(game.brief_style as string).toUpperCase()}</BriefBadge>}
+          <BriefBadge bg="#ffd400" color="#1a1a1a">TEXTURING</BriefBadge>
+        </div>
+      </>
+    );
+  }
+
+  if (mode === 'modelisation') {
+    return (
+      <>
+        <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none mb-4" style={{ fontSize: "36px" }}>
+          REPRODUIS CET OBJET FIDELEMENT
+        </p>
+        {game.brief_objet && (
+          <div className="flex flex-wrap gap-3 mb-3">
+            <BriefBadge bg="#2e6bff" color="#fff">{(game.brief_objet as string).toUpperCase()}</BriefBadge>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-3">
+          {game.brief_style && <BriefBadge bg="#ff9500" color="#1a1a1a">{(game.brief_style as string).toUpperCase()}</BriefBadge>}
+          <BriefBadge bg="#ffd400" color="#1a1a1a">MODELISATION</BriefBadge>
+        </div>
+      </>
+    );
+  }
+
+  if (mode === 'animation') {
+    const action = game.brief_action as string | undefined;
+    const style  = game.brief_style  as string | undefined;
+    const title  = action === 'LIBRE'
+      ? 'ANIME CE PERSONNAGE LIBREMENT'
+      : style
+      ? `ANIME EN STYLE ${style.toUpperCase()}`
+      : action
+      ? `ANIME CE PERSONNAGE QUI ${action.toUpperCase()}`
+      : 'ANIME CE PERSONNAGE';
+
+    return (
+      <>
+        <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none mb-4" style={{ fontSize: "36px" }}>
+          {title}
+        </p>
+        <BriefBadge bg="#ffd400" color="#1a1a1a">ANIMATION</BriefBadge>
+      </>
+    );
+  }
+
+  return (
+    <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none" style={{ fontSize: "36px" }}>
+      BRIEF EN COURS DE CHARGEMENT...
+    </p>
+  );
+}
+
+// ─── Asset buttons ────────────────────────────────────────────────────────────
+
+function AssetButtons({ game }: { game: Game }) {
+  const mode = game.mode as string;
+
+  if (mode === 'modelisation' && game.blueprint_url) {
+    return (
+      <div className="flex items-center gap-4">
+        <span className="font-archivo-black text-sm uppercase tracking-wide text-[#1a1a1a]">REFERENCE :</span>
+        <a
+          href={game.blueprint_url as string}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-archivo-black text-sm uppercase tracking-wide text-[#2e6bff] underline underline-offset-4 decoration-2 hover:text-[#ff2e2e] transition-colors duration-100"
+        >
+          VOIR LE BLUEPRINT
+        </a>
+      </div>
+    );
+  }
+
+  if ((mode === 'texturing' || mode === 'animation') && game.asset_url) {
+    const label = mode === 'animation' ? 'TELECHARGER LE RIG' : 'TELECHARGER LE MESH';
+    return (
+      <div className="flex items-center gap-4">
+        <span className="font-archivo-black text-sm uppercase tracking-wide text-[#1a1a1a]">FICHIER DE BASE :</span>
+        <a href={game.asset_url as string} download>
+          <Button variant="secondary" className="!text-sm !px-5 !py-2 !rounded-[10px] !border-[3px] !shadow-[0_4px_0_#1a1a1a] hover:!shadow-[0_7px_0_#1a1a1a]">
+            {label}
+          </Button>
+        </a>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+// ─── Status pill ──────────────────────────────────────────────────────────────
+
+function StatusPill({ status }: { status: string }) {
+  const isSubmitted = status === 'submitted';
+  return (
+    <span
+      className="flex items-center gap-1.5 font-archivo-black text-xs uppercase tracking-wide shrink-0 px-2.5 py-1 border-[2px] border-[#1a1a1a]"
+      style={{ borderRadius: "8px", backgroundColor: isSubmitted ? "#f0fff7" : "#fffbe6", color: isSubmitted ? "#0aa36b" : "#b9a300", boxShadow: "2px 2px 0 #1a1a1a" }}
+    >
+      <span
+        className={`w-2 h-2 rounded-full border border-[#1a1a1a] shrink-0 ${isSubmitted ? "" : "animate-blink-dot"}`}
+        style={{ backgroundColor: isSubmitted ? "#0aa36b" : "#ff9500" }}
+      />
+      {isSubmitted ? "SOUMIS" : "EN COURS"}
+    </span>
+  );
+}
+
+// ─── Brief badge ──────────────────────────────────────────────────────────────
+
+function BriefBadge({ children, bg, color }: { children: React.ReactNode; bg: string; color: string }) {
+  return (
+    <span
+      className="font-archivo-black text-xs uppercase tracking-widest px-3 py-1.5 border-[3px] border-[#1a1a1a]"
+      style={{ backgroundColor: bg, color, borderRadius: "8px", boxShadow: "3px 3px 0 #1a1a1a" }}
+    >
+      {children}
+    </span>
+  );
+}
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
+function IconUpload({ dimmed }: { dimmed: boolean }) {
+  return (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+      stroke={dimmed ? "#b9a300" : "#ff2e2e"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="16 16 12 12 8 16" />
+      <line x1="12" y1="12" x2="12" y2="21" />
+      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+    </svg>
+  );
+}
+
+function IconCheck() {
+  return (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+      stroke="#0aa36b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="8 12 11 15 16 9" />
+    </svg>
+  );
+}

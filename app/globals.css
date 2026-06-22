@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --yellow: #ffd400;
+  --black: #1a1a1a;
+  --red: #ff2e2e;
+  --blue: #2e6bff;
+  --green: #0aa36b;
+  --white: #fff;
+}
+
+body {
+  background-color: var(--yellow);
+  background-image: radial-gradient(#1a1a1a 1.5px, transparent 1.6px);
+  background-size: 18px 18px;
+  color: var(--black);
+  font-family: 'Archivo', sans-serif;
+}
