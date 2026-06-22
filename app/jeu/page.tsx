@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+export const dynamic = 'force-dynamic';
+
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/Button";
@@ -29,6 +31,18 @@ function formatTime(s: number): string {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function JeuPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4">
+        <p className="font-archivo-black text-[#1a1a1a] uppercase tracking-widest text-sm">Chargement...</p>
+      </main>
+    }>
+      <JeuPageInner />
+    </Suspense>
+  );
+}
+
+function JeuPageInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const gameId       = searchParams.get('gameId');
