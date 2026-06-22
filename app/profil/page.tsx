@@ -326,24 +326,6 @@ export default function ProfilPage() {
           ))}
         </div>
 
-        {/* ── Meilleur rendu ── */}
-        <div className="flex flex-col gap-4">
-          <SectionTitle>MON MEILLEUR RENDU</SectionTitle>
-          {bestRenderUrl ? (
-            <div className="w-full h-64 border-[5px] border-[#1a1a1a] rounded-[16px] overflow-hidden" style={{ boxShadow: "6px 6px 0 #1a1a1a" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={bestRenderUrl} alt="Meilleur rendu" className="w-full h-full object-cover" />
-            </div>
-          ) : (
-            <div className="w-full h-64 border-[5px] border-[#1a1a1a] rounded-[16px] relative overflow-hidden" style={{ boxShadow: "6px 6px 0 #1a1a1a", background: "linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #1a0a2e 100%)" }}>
-              <div className="absolute inset-0 opacity-[0.12]" style={{ backgroundImage: "linear-gradient(rgba(255,212,0,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,212,0,.8) 1px, transparent 1px)", backgroundSize: "36px 36px" }} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <p className="font-archivo-black text-white/30 uppercase text-center px-6 leading-relaxed" style={{ fontSize: "11px", letterSpacing: "0.1em" }}>AUCUN RENDU SOUMIS<br />POUR L&apos;INSTANT</p>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* ── Réseaux ── */}
         {(editing || hasSocials) && (
           <div className="flex flex-col gap-4">
