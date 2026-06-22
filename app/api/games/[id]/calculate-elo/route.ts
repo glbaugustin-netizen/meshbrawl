@@ -114,5 +114,29 @@ export async function POST(
     .update({ status: 'finished' })
     .eq('id', gameId)
 
+  // 8. Supprime les fichiers de soumission du bucket
+  const { data: submissions } = await supabase
+    .from('game_players')
+    .select('submission_url')
+    .eq('game_id', gameId)
+    .not('submission_url', 'is', null)
+
+  if (submissions && submissions.length > 0) {
+    const paths = submissions
+      .map((s) => {
+        if (!s.submission_url) return null
+        const match = s.submission_url.match(/\/submissions\/(.+?)(\?|$)/)
+        return match ? match[1] : null
+      })
+      .filter(Boolean) as string[]
+
+    if (paths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from('submissions')
+        .remove(paths)
+      if (storageError) console.error('Erreur suppression fichiers:', storageError)
+    }
+  }
+
   return NextResponse.json({ ok: true })
 }
