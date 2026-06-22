@@ -119,36 +119,39 @@ export default function ProfilPage() {
   useEffect(() => {
     let mounted = true;
 
-    async function load() {
+    // Safety net : si INITIAL_SESSION ne fire jamais (token bloqué), stoppe après 4s
+    const safetyTimeout = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 4000);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      clearTimeout(safetyTimeout);
+      if (!mounted) return;
+      if (!session?.user) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!mounted) return;
-        if (!session?.user) { setLoading(false); return; }
-        const { data } = await supabase.from('users').select('*').eq('id', session.user.id).single();
+        const { data } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
         if (!mounted) return;
         if (data) setProfile(data);
       } catch (e) {
-        console.error('Profil load error:', e);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    load();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!mounted) return;
-      if (!session?.user) { setProfile(null); setLoading(false); return; }
-      try {
-        const { data } = await supabase.from('users').select('*').eq('id', session.user.id).single();
-        if (!mounted) return;
-        if (data) setProfile(data);
+        console.error('Profil fetch error:', e);
       } finally {
         if (mounted) setLoading(false);
       }
     });
 
-    return () => { mounted = false; subscription.unsubscribe(); };
+    return () => {
+      mounted = false;
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
