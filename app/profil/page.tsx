@@ -117,22 +117,23 @@ export default function ProfilPage() {
   const [modalLoading,  setModalLoading]  = useState(false);
 
   useEffect(() => {
+    // Lecture immédiate depuis les cookies (pas de réseau)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user) { setLoading(false); return; }
+      const { data } = await supabase.from("users").select("*").eq("id", session.user.id).single();
+      if (data) setProfile(data);
+      setLoading(false); // toujours appelé, même si data est null
+    });
+
+    // Capte les changements ultérieurs (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        if (!session?.user) { setLoading(false); return; }
+        if (!session?.user) { setProfile(null); setLoading(false); return; }
         const { data } = await supabase.from("users").select("*").eq("id", session.user.id).single();
         if (data) setProfile(data);
         setLoading(false);
       }
     );
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        supabase.from("users").select("*").eq("id", session.user.id).single()
-          .then(({ data }) => { if (data) { setProfile(data); setLoading(false); } });
-      } else {
-        setLoading(false);
-      }
-    });
     return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -214,7 +215,7 @@ export default function ProfilPage() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    router.push("/auth");
+    router.push("/");
     router.refresh();
   };
 
