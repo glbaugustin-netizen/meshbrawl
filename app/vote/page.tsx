@@ -133,9 +133,14 @@ function VotePageInner() {
   }, [gameId]);
 
   // Advance to next render or redirect
-  const advance = useCallback(() => {
+  const advance = useCallback(async () => {
     const idx = rendusIndexRef.current;
     if (idx + 1 >= rendus.length) {
+      try {
+        await fetch(`/api/games/${gameId}/calculate-elo`, { method: 'POST' });
+      } catch (e) {
+        console.error('Erreur calcul ELO:', e);
+      }
       router.push(`/resultats?gameId=${gameId}`);
     } else {
       setRendusIndex(idx + 1);
