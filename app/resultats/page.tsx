@@ -2,38 +2,164 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/Button";
 
-// ─── Types & mock data ────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Player {
-  rang: number;
-  pseudo: string;
-  avatar: string;
-  points: number;
-  eloChange: number;
-  country: string;
-  isCurrentUser?: boolean;
+  rang:          number;
+  pseudo:        string;
+  avatar:        string;
+  points:        number;
+  eloChange:     number;
+  country:       string;
+  avatarColor:   string;
+  isCurrentUser: boolean;
 }
 
-const mockResultats: Player[] = [
-  { rang: 1, pseudo: "PolyWarrior",  avatar: "PW", points: 87, eloChange:  62, country: "US" },
-  { rang: 2, pseudo: "BlenderKing",  avatar: "BK", points: 71, eloChange:  41, country: "FR" },
-  { rang: 3, pseudo: "MeshMaster",   avatar: "MM", points: 54, eloChange:  18, country: "DE" },
-  { rang: 4, pseudo: "Toi",          avatar: "TO", points: 38, eloChange:  -5, country: "FR", isCurrentUser: true },
-];
-
-// Podium order: 2nd left · 1st centre · 3rd right
-const podiumOrder = [2, 1, 3].map((r) => mockResultats.find((p) => p.rang === r)!);
-
-const AVATAR_COLORS = ["#ff2e2e", "#2e6bff", "#0aa36b", "#c026d3", "#ff9500"];
-const avatarColor = (idx: number) => AVATAR_COLORS[idx % AVATAR_COLORS.length];
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Page wrapper ─────────────────────────────────────────────────────────────
 
 export default function ResultatsPage() {
-  const router = useRouter();
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <ResultatsPageInner />
+    </Suspense>
+  );
+}
+
+// ─── Inner page ───────────────────────────────────────────────────────────────
+
+function ResultatsPageInner() {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const gameId       = searchParams.get('gameId');
+  const supabase     = createClient();
+
+  const [resultats, setResultats] = useState<Player[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState('');
+
+  useEffect(() => {
+    if (!gameId) { setLoading(false); return; }
+
+    async function load() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // Attend que le calcul ELO soit terminé (max 15s)
+        let attempts = 0;
+        while (attempts < 10) {
+          const { data: game } = await supabase
+            .from('games')
+            .select('status')
+            .eq('id', gameId)
+            .single();
+          if (game?.status === 'finished') break;
+          await new Promise((r) => setTimeout(r, 1500));
+          attempts++;
+        }
+
+        // Charge les résultats
+        const { data, error: err } = await supabase
+          .from('game_players')
+          .select(`
+            id,
+            rank,
+            points_received,
+            elo_change,
+            user_id,
+            users (
+              pseudo,
+              avatar_color,
+              country
+            )
+          `)
+          .eq('game_id', gameId)
+          .order('rank', { ascending: true });
+
+        if (err) { setError(err.message); setLoading(false); return; }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mapped: Player[] = (data ?? []).map((gp: any) => ({
+          rang:          gp.rank          ?? 99,
+          pseudo:        gp.users?.pseudo ?? 'Joueur',
+          avatar:        (gp.users?.pseudo ?? '??').slice(0, 2).toUpperCase(),
+          points:        gp.points_received ?? 0,
+          eloChange:     gp.elo_change      ?? 0,
+          country:       gp.users?.country  ?? '??',
+          avatarColor:   gp.users?.avatar_color ?? '#8a3ffc',
+          isCurrentUser: gp.user_id === user?.id,
+        }));
+
+        setResultats(mapped);
+      } catch (e) {
+        console.error(e);
+        setError('Erreur de chargement');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId]);
+
+  if (loading) return <LoadingScreen />;
+
+  if (error) {
+    return (
+      <main className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <p className="font-bangers uppercase tracking-widest text-[#ff2e2e]" style={{ fontSize: "36px" }}>
+            ERREUR
+          </p>
+          <p className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]/60">{error}</p>
+          <button
+            type="button"
+            onClick={() => router.push('/match')}
+            className="font-archivo-black uppercase tracking-widest text-[#1a1a1a] bg-white border-[4px] border-[#1a1a1a] px-8 py-3 mt-2"
+            style={{ borderRadius: "12px", boxShadow: "4px 4px 0 #1a1a1a", fontSize: "14px" }}
+          >
+            RETOUR
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!gameId || resultats.length === 0) {
+    return (
+      <main className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <p
+            className="font-bangers uppercase tracking-widest text-[#1a1a1a]"
+            style={{ fontSize: "36px", textShadow: "3px 3px 0 #ff2e2e" }}
+          >
+            RESULTATS INTROUVABLES
+          </p>
+          <p className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]/50">
+            Impossible de charger les résultats de cette partie.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/match')}
+            className="font-archivo-black uppercase tracking-widest text-[#1a1a1a] bg-white border-[4px] border-[#1a1a1a] px-8 py-3 mt-2"
+            style={{ borderRadius: "12px", boxShadow: "4px 4px 0 #1a1a1a", fontSize: "14px" }}
+          >
+            RETOUR
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // Podium order: 2nd left · 1st centre · 3rd right
+  const top3 = [2, 1, 3]
+    .map((r) => resultats.find((p) => p.rang === r))
+    .filter((p): p is Player => p !== undefined);
 
   return (
     <main className="min-h-[calc(100vh-64px)] px-4 py-12">
@@ -49,7 +175,6 @@ export default function ResultatsPage() {
 
         {/* ── Podium ── */}
         <section className="relative">
-          {/* Decorative background text */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
             <span
               className="font-bangers select-none animate-badge-pop"
@@ -65,18 +190,19 @@ export default function ResultatsPage() {
             </span>
           </div>
 
-          {/* Steps */}
           <div className="relative z-10 flex items-end justify-center gap-2 sm:gap-4">
-            {podiumOrder.map((player, idx) => (
-              <PodiumColumn key={player.rang} player={player} colorIdx={idx} />
+            {top3.map((player) => (
+              <PodiumColumn key={player.rang} player={player} />
             ))}
           </div>
         </section>
 
         {/* ── Full ranking table ── */}
         <section>
-          <h2 className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a] mb-4"
-            style={{ borderLeft: "5px solid #ff2e2e", paddingLeft: "14px" }}>
+          <h2
+            className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a] mb-4"
+            style={{ borderLeft: "5px solid #ff2e2e", paddingLeft: "14px" }}
+          >
             CLASSEMENT COMPLET
           </h2>
 
@@ -98,8 +224,12 @@ export default function ResultatsPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockResultats.map((row, idx) => (
-                  <TableRow key={row.rang} row={row} colorIdx={idx} isLast={idx === mockResultats.length - 1} />
+                {resultats.map((row, idx) => (
+                  <TableRow
+                    key={row.rang}
+                    row={row}
+                    isLast={idx === resultats.length - 1}
+                  />
                 ))}
               </tbody>
             </table>
@@ -110,14 +240,14 @@ export default function ResultatsPage() {
         <div className="flex gap-4 justify-center flex-wrap">
           <Button
             variant="primary"
-            onClick={() => router.push("/jouer")}
+            onClick={() => router.push('/match')}
             className="!text-2xl !px-10 !py-3 !rounded-[14px]"
           >
             REJOUER
           </Button>
           <Button
             variant="secondary"
-            onClick={() => router.push("/profil")}
+            onClick={() => router.push('/profil')}
             className="!text-2xl !px-10 !py-3 !rounded-[14px]"
           >
             VOIR MON PROFIL
@@ -125,6 +255,27 @@ export default function ResultatsPage() {
         </div>
 
       </div>
+    </main>
+  );
+}
+
+// ─── Loading screen ───────────────────────────────────────────────────────────
+
+function LoadingScreen() {
+  return (
+    <main
+      className="min-h-[calc(100vh-64px)] flex items-center justify-center"
+      style={{
+        background: "radial-gradient(circle, #ffd400 1px, transparent 1px) 0 0 / 28px 28px",
+        backgroundColor: "#fffbe6",
+      }}
+    >
+      <p
+        className="font-bangers uppercase tracking-widest text-[#1a1a1a]"
+        style={{ fontSize: "52px", textShadow: "4px 4px 0 #ff2e2e" }}
+      >
+        CHARGEMENT...
+      </p>
     </main>
   );
 }
@@ -137,70 +288,61 @@ const STEP = {
   3: { h: 64,  avatarPx: 56, fontSize: "15px", stepBg: "#ffffff" },
 } as const;
 
-function PodiumColumn({ player, colorIdx }: { player: Player; colorIdx: number }) {
+function PodiumColumn({ player }: { player: Player }) {
   const isFirst = player.rang === 1;
-  const cfg = STEP[player.rang as 1 | 2 | 3];
+  const cfg     = STEP[player.rang as 1 | 2 | 3];
 
   return (
     <div className="flex flex-col items-center flex-1 max-w-[180px]">
-      {/* WINNER badge (1st only) */}
       {isFirst && (
         <span
           className="font-bangers uppercase tracking-widest text-white bg-[#ff2e2e] border-[3px] border-[#1a1a1a] px-3 py-1 mb-2 animate-badge-pop"
-          style={{
-            borderRadius: "8px",
-            fontSize: "18px",
-            boxShadow: "3px 3px 0 #1a1a1a",
-            transform: "rotate(-3deg)",
-          }}
+          style={{ borderRadius: "8px", fontSize: "18px", boxShadow: "3px 3px 0 #1a1a1a", transform: "rotate(-3deg)" }}
         >
           WINNER
         </span>
       )}
 
-      {/* Avatar */}
       <div
         className="rounded-full border-[4px] border-[#1a1a1a] flex items-center justify-center font-archivo-black text-white shrink-0"
         style={{
           width: cfg.avatarPx,
           height: cfg.avatarPx,
           fontSize: cfg.fontSize,
-          backgroundColor: avatarColor(colorIdx),
+          backgroundColor: player.avatarColor,
           boxShadow: "3px 3px 0 #1a1a1a",
         }}
       >
         {player.avatar}
       </div>
 
-      {/* Pseudo */}
       <p
-        className="font-archivo-black text-[#1a1a1a] text-center mt-2 leading-tight px-1 truncate w-full text-center"
+        className="font-archivo-black text-[#1a1a1a] text-center mt-2 leading-tight px-1 truncate w-full"
         style={{ fontSize: isFirst ? "14px" : "12px" }}
       >
         {player.pseudo}
       </p>
 
-      {/* Country badge */}
-      <span
-        className="font-archivo-black text-[10px] text-[#1a1a1a] bg-[#ffd400] border-[2px] border-[#1a1a1a] px-1.5 py-0.5 mt-1 uppercase"
-        style={{ borderRadius: "5px", boxShadow: "2px 2px 0 #1a1a1a" }}
-      >
-        {player.country}
-      </span>
+      {player.country && player.country !== '??' && (
+        <span
+          className="font-archivo-black text-[10px] text-[#1a1a1a] bg-[#ffd400] border-[2px] border-[#1a1a1a] px-1.5 py-0.5 mt-1 uppercase"
+          style={{ borderRadius: "5px", boxShadow: "2px 2px 0 #1a1a1a" }}
+        >
+          {player.country}
+        </span>
+      )}
 
-      {/* Points */}
       <p className="font-bangers text-[#1a1a1a] mt-1 leading-none" style={{ fontSize: "20px" }}>
         {player.points} PTS
       </p>
 
-      {/* Podium step */}
       <div
         className="w-full mt-3 border-[4px] border-[#1a1a1a] flex items-center justify-center"
         style={{
           height: cfg.h,
           backgroundColor: cfg.stepBg,
           borderRadius: "10px 10px 0 0",
-          boxShadow: "4px 0 0 #1a1a1a, -0px 0 0 #1a1a1a",
+          boxShadow: "4px 0 0 #1a1a1a",
         }}
       >
         <span
@@ -216,83 +358,59 @@ function PodiumColumn({ player, colorIdx }: { player: Player; colorIdx: number }
 
 // ─── Table row ────────────────────────────────────────────────────────────────
 
-function TableRow({
-  row,
-  colorIdx,
-  isLast,
-}: {
-  row: Player;
-  colorIdx: number;
-  isLast: boolean;
-}) {
+function TableRow({ row, isLast }: { row: Player; isLast: boolean }) {
   const highlight = row.isCurrentUser;
-
-  const cellBase = `px-4 py-3 ${isLast ? "" : "border-b-[3px] border-b-[#1a1a1a]/10"}`;
-  const rowBg = highlight ? "#fff7cc" : colorIdx % 2 === 0 ? "#ffffff" : "#fafafa";
+  const cellBase  = `px-4 py-3 ${isLast ? "" : "border-b-[3px] border-b-[#1a1a1a]/10"}`;
+  const rowBg     = highlight ? "#fff7cc" : row.rang % 2 === 0 ? "#fafafa" : "#ffffff";
 
   return (
     <tr style={{ backgroundColor: rowBg }}>
-      {/* Rang */}
       <td
         className={cellBase}
-        style={{
-          borderLeft: highlight ? "5px solid #ff2e2e" : "5px solid transparent",
-        }}
+        style={{ borderLeft: highlight ? "5px solid #ff2e2e" : "5px solid transparent" }}
       >
-        <span className="font-bangers text-2xl text-[#1a1a1a]">
-          {row.rang}
-        </span>
+        <span className="font-bangers text-2xl text-[#1a1a1a]">{row.rang}</span>
       </td>
 
-      {/* Joueur */}
       <td className={cellBase}>
         <div className="flex items-center gap-3">
-          {/* Avatar */}
           <div
             className="w-9 h-9 rounded-full border-[3px] border-[#1a1a1a] flex items-center justify-center font-archivo-black text-white text-xs shrink-0"
-            style={{ backgroundColor: avatarColor(colorIdx) }}
+            style={{ backgroundColor: row.avatarColor }}
           >
             {row.avatar}
           </div>
 
           <div className="flex flex-col min-w-0">
-            <span className="font-archivo-black text-sm text-[#1a1a1a] truncate">
-              {row.pseudo}
-            </span>
+            <span className="font-archivo-black text-sm text-[#1a1a1a] truncate">{row.pseudo}</span>
             {highlight && (
-              <span
-                className="font-archivo-black text-[10px] uppercase tracking-widest text-[#ff2e2e]"
-              >
+              <span className="font-archivo-black text-[10px] uppercase tracking-widest text-[#ff2e2e]">
                 VOUS
               </span>
             )}
           </div>
 
-          {/* Country */}
-          <span
-            className="font-archivo-black text-[10px] text-[#1a1a1a] bg-[#ffd400] border-[2px] border-[#1a1a1a] px-1.5 py-0.5 uppercase shrink-0 ml-auto"
-            style={{ borderRadius: "5px", boxShadow: "2px 2px 0 #1a1a1a" }}
-          >
-            {row.country}
-          </span>
+          {row.country && row.country !== '??' && (
+            <span
+              className="font-archivo-black text-[10px] text-[#1a1a1a] bg-[#ffd400] border-[2px] border-[#1a1a1a] px-1.5 py-0.5 uppercase shrink-0 ml-auto"
+              style={{ borderRadius: "5px", boxShadow: "2px 2px 0 #1a1a1a" }}
+            >
+              {row.country}
+            </span>
+          )}
         </div>
       </td>
 
-      {/* Points */}
       <td className={cellBase}>
-        <span className="font-bangers text-xl text-[#1a1a1a]">
-          {row.points}
-        </span>
+        <span className="font-bangers text-xl text-[#1a1a1a]">{row.points}</span>
       </td>
 
-      {/* ELO change */}
       <td className={cellBase}>
         <span
           className="font-archivo-black text-sm"
           style={{ color: row.eloChange >= 0 ? "#0aa36b" : "#ff2e2e" }}
         >
-          {row.eloChange >= 0 ? "+" : ""}
-          {row.eloChange} ELO
+          {row.eloChange >= 0 ? "+" : ""}{row.eloChange} ELO
         </span>
       </td>
     </tr>
