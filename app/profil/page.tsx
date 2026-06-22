@@ -117,24 +117,38 @@ export default function ProfilPage() {
   const [modalLoading,  setModalLoading]  = useState(false);
 
   useEffect(() => {
-    // Lecture immédiate depuis les cookies (pas de réseau)
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.user) { setLoading(false); return; }
-      const { data } = await supabase.from("users").select("*").eq("id", session.user.id).single();
-      if (data) setProfile(data);
-      setLoading(false); // toujours appelé, même si data est null
+    let mounted = true;
+
+    async function load() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        if (!session?.user) { setLoading(false); return; }
+        const { data } = await supabase.from('users').select('*').eq('id', session.user.id).single();
+        if (!mounted) return;
+        if (data) setProfile(data);
+      } catch (e) {
+        console.error('Profil load error:', e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    load();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
+      if (!session?.user) { setProfile(null); setLoading(false); return; }
+      try {
+        const { data } = await supabase.from('users').select('*').eq('id', session.user.id).single();
+        if (!mounted) return;
+        if (data) setProfile(data);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     });
 
-    // Capte les changements ultérieurs (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!session?.user) { setProfile(null); setLoading(false); return; }
-        const { data } = await supabase.from("users").select("*").eq("id", session.user.id).single();
-        if (data) setProfile(data);
-        setLoading(false);
-      }
-    );
-    return () => subscription.unsubscribe();
+    return () => { mounted = false; subscription.unsubscribe(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -213,10 +227,9 @@ export default function ProfilPage() {
   const closeEmailModal = () => { setEmailModal(false); setNewEmail(''); setModalAlert(null); };
   const closePwdModal   = () => { setPasswordModal(false); setNewPassword(''); setConfirmPwd(''); setModalAlert(null); };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
+  const handleSignOut = () => {
+    supabase.auth.signOut().catch(console.error);
     router.push("/");
-    router.refresh();
   };
 
   if (loading) {

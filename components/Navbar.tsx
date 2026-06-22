@@ -162,12 +162,12 @@ function AvatarMenu({ user, pseudo, avatarColor }: { user: User; pseudo: string;
     return () => document.removeEventListener("mousedown", handle);
   }, [open]);
 
-  const handleSignOut = async () => {
+  const handleSignOut = () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    // signOut en arrière-plan — ne pas awaiter pour ne pas bloquer la navigation
+    supabase.auth.signOut().catch(console.error);
     setOpen(false);
     router.push('/');
-    router.refresh();
   };
 
   // user prop kept for future use (e.g. displaying email in dropdown)
