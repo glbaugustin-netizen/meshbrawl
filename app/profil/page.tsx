@@ -244,7 +244,6 @@ export default function ProfilPage() {
   const rang          = profile.rang          ?? null;
   const partiesJouees = profile.parties_jouees     ?? 0;
   const meilleurClass = profile.meilleur_classement ?? null;
-  const bestRenderUrl = profile.best_render_url     || null;
   const instagram     = profile.instagram     || '';
   const tiktok        = profile.tiktok        || '';
   const youtube       = profile.youtube       || '';
