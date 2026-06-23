@@ -58,6 +58,9 @@ function JeuPageInner() {
   const [submitted,  setSubmitted]  = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [gameLoaded,  setGameLoaded]  = useState(false);
+  const [quitModal1,  setQuitModal1]  = useState(false);
+  const [quitModal2,  setQuitModal2]  = useState(false);
+  const [quitting,    setQuitting]    = useState(false);
   const fileInputRef    = useRef<HTMLInputElement>(null);
   const redirectedRef   = useRef(false);
   const timerWasPositive = useRef(false);
@@ -191,6 +194,33 @@ function JeuPageInner() {
 
     setSubmitted(true);
     setUploading(false);
+  };
+
+  const handleQuit = async () => {
+    setQuitting(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || !gameId) { setQuitting(false); return; }
+
+    const { data: userData } = await supabase
+      .from('users')
+      .select('elo')
+      .eq('id', session.user.id)
+      .single();
+
+    if (userData) {
+      await supabase
+        .from('users')
+        .update({ elo: Math.max(0, (userData.elo ?? 1000) - 20) })
+        .eq('id', session.user.id);
+    }
+
+    await supabase
+      .from('game_players')
+      .delete()
+      .eq('game_id', gameId)
+      .eq('user_id', session.user.id);
+
+    router.push('/match');
   };
 
   const handleDragOver  = (e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true); };
@@ -386,6 +416,18 @@ function JeuPageInner() {
                 )}
               </div>
             )}
+
+            {!submitted && (
+              <div className="flex justify-center pt-4">
+                <button
+                  type="button"
+                  onClick={() => setQuitModal1(true)}
+                  className="font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a]/40 underline underline-offset-4 hover:text-[#ff2e2e] transition-colors duration-100"
+                >
+                  Quitter la partie
+                </button>
+              </div>
+            )}
           </div>
 
           {/* ── Sidebar — Player statuses ── */}
@@ -414,6 +456,91 @@ function JeuPageInner() {
           </aside>
         </div>
       </div>
+
+      {/* Modal 1 — première confirmation */}
+      {quitModal1 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ backgroundColor: "rgba(26,26,26,0.7)" }}
+        >
+          <div
+            className="w-full max-w-sm flex flex-col gap-5 p-6"
+            style={{ backgroundColor: "#fff", border: "5px solid #1a1a1a", borderRadius: "16px", boxShadow: "6px 6px 0 #1a1a1a" }}
+          >
+            <h3 className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none" style={{ fontSize: "28px" }}>
+              QUITTER LA PARTIE ?
+            </h3>
+            <p className="font-archivo text-[#1a1a1a]/70 text-sm leading-relaxed" style={{ fontWeight: 700 }}>
+              Tu es sûr de vouloir abandonner ? Cette action a des conséquences...
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setQuitModal1(false); setQuitModal2(true); }}
+                className="flex-1 font-bangers uppercase tracking-widest text-white bg-[#ff2e2e] border-[4px] border-[#1a1a1a] py-3 transition-all duration-100 hover:-translate-y-[2px]"
+                style={{ borderRadius: "12px", boxShadow: "0 6px 0 #8b0000", fontSize: "20px" }}
+              >
+                QUITTER
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuitModal1(false)}
+                className="flex-1 font-bangers uppercase tracking-widest text-[#1a1a1a] bg-white border-[4px] border-[#1a1a1a] py-3 transition-all duration-100 hover:-translate-y-[2px]"
+                style={{ borderRadius: "12px", boxShadow: "0 6px 0 #1a1a1a", fontSize: "20px" }}
+              >
+                RESTER
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2 — confirmation finale avec pénalité */}
+      {quitModal2 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ backgroundColor: "rgba(26,26,26,0.7)" }}
+        >
+          <div
+            className="w-full max-w-sm flex flex-col gap-5 p-6"
+            style={{ backgroundColor: "#fff", border: "5px solid #ff2e2e", borderRadius: "16px", boxShadow: "6px 6px 0 #ff2e2e" }}
+          >
+            <h3 className="font-bangers uppercase tracking-widest text-[#ff2e2e] leading-none" style={{ fontSize: "28px" }}>
+              DERNIERE CHANCE !
+            </h3>
+            <div
+              className="flex items-center justify-center py-4 border-[4px] border-[#1a1a1a]"
+              style={{ borderRadius: "12px", backgroundColor: "#fff7cc", boxShadow: "4px 4px 0 #1a1a1a" }}
+            >
+              <span className="font-bangers text-[#ff2e2e] tracking-widest" style={{ fontSize: "48px" }}>
+                -20 ELO
+              </span>
+            </div>
+            <p className="font-archivo text-[#1a1a1a]/70 text-sm leading-relaxed" style={{ fontWeight: 700 }}>
+              Quitter en cours de partie te coûtera <strong>20 ELO</strong>. C&apos;est définitif.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleQuit}
+                disabled={quitting}
+                className="flex-1 font-bangers uppercase tracking-widest text-white bg-[#ff2e2e] border-[4px] border-[#1a1a1a] py-3 transition-all duration-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ borderRadius: "12px", boxShadow: "0 6px 0 #8b0000", fontSize: "20px" }}
+              >
+                {quitting ? "..." : "CONFIRMER"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setQuitModal1(false); setQuitModal2(false); }}
+                className="flex-1 font-bangers uppercase tracking-widest text-[#1a1a1a] bg-white border-[4px] border-[#1a1a1a] py-3 transition-all duration-100 hover:-translate-y-[2px]"
+                style={{ borderRadius: "12px", boxShadow: "0 6px 0 #1a1a1a", fontSize: "20px" }}
+              >
+                RESTER
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
