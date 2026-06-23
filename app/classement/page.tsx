@@ -334,7 +334,10 @@ function PodiumCol({
   const color    = player.avatar_color || fallbackColor(colorIdx);
 
   return (
-    <div className="flex flex-col items-center flex-1 max-w-[190px]">
+    <div
+      className="flex flex-col items-center flex-1 max-w-[190px] cursor-pointer hover:-translate-y-1 transition-transform duration-100"
+      onClick={() => window.location.href = `/joueur/${player.id}`}
+    >
       {player.isCurrentUser && (
         <span
           className="font-archivo-black text-xs text-white bg-[#ff2e2e] border-[2px] border-[#1a1a1a] px-2 py-0.5 mb-1 uppercase tracking-wide"
@@ -409,7 +412,11 @@ function TableRow({
   const color     = row.avatar_color || fallbackColor(colorIdx);
 
   return (
-    <tr style={{ backgroundColor: rowBg }}>
+    <tr
+      style={{ backgroundColor: rowBg, cursor: "pointer" }}
+      onClick={() => window.location.href = `/joueur/${row.id}`}
+      className="hover:brightness-95 transition-all duration-75"
+    >
       <td
         className={`px-4 py-3 ${isLast ? "" : "border-b-[2px] border-b-[#efefef]"}`}
         style={{ borderLeft: highlight ? "5px solid #ff2e2e" : "5px solid transparent" }}
