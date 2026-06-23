@@ -72,8 +72,9 @@ function AttentePageInner() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [countdown,   setCountdown]   = useState(COUNTDOWN_START);
   const [launched,    setLaunched]    = useState(false);
-  const startingRef   = useRef(false);
-  const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startingRef       = useRef(false);
+  const intervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownStarted  = useRef(false);
 
   // Récupère l'utilisateur connecté
   useEffect(() => {
@@ -134,9 +135,14 @@ function AttentePageInner() {
       })
       .subscribe();
 
+    const pollInterval = setInterval(() => {
+      loadPlayers();
+    }, 3000);
+
     return () => {
       supabase.removeChannel(playerChannel);
       supabase.removeChannel(gameChannel);
+      clearInterval(pollInterval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
@@ -145,7 +151,35 @@ function AttentePageInner() {
   async function startGame() {
     if (startingRef.current || !gameId) return;
     startingRef.current = true;
-    await fetch(`/api/games/${gameId}/start`, { method: 'POST' });
+
+    try {
+      await fetch(`/api/games/${gameId}/start`, { method: 'POST' });
+    } catch (e) {
+      console.error('Start error:', e);
+      startingRef.current = false;
+      return;
+    }
+
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      const { data } = await supabase
+        .from('games')
+        .select('status')
+        .eq('id', gameId)
+        .single();
+
+      if (data?.status === 'in_progress') {
+        clearInterval(poll);
+        setLaunched(true);
+        setTimeout(() => router.push(`/jeu?gameId=${gameId}`), 1500);
+      }
+
+      if (attempts >= 10) {
+        clearInterval(poll);
+        startingRef.current = false;
+      }
+    }, 1000);
   }
 
   // Countdown + auto-lancement
@@ -153,22 +187,23 @@ function AttentePageInner() {
     if (players.length >= 10) { startGame(); return; }
 
     if (players.length >= MIN_PLAYERS) {
-      // Reset le countdown à chaque nouveau joueur
-      setCountdown(COUNTDOWN_START);
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (!countdownStarted.current) {
+        countdownStarted.current = true;
+        setCountdown(COUNTDOWN_START);
 
-      intervalRef.current = setInterval(() => {
-        setCountdown((c) => {
-          if (c <= 1) {
-            if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-            startGame();
-            return 0;
-          }
-          return c - 1;
-        });
-      }, 1000);
+        intervalRef.current = setInterval(() => {
+          setCountdown((c) => {
+            if (c <= 1) {
+              if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+              startGame();
+              return 0;
+            }
+            return c - 1;
+          });
+        }, 1000);
+      }
     } else {
-      // Moins de 3 joueurs → stoppe le timer
+      countdownStarted.current = false;
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       setCountdown(COUNTDOWN_START);
     }
