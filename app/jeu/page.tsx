@@ -50,6 +50,7 @@ function JeuPageInner() {
 
   const [game,       setGame]       = useState<Game | null>(null);
   const [players,    setPlayers]    = useState<GamePlayer[]>([]);
+  const [endsAt,     setEndsAt]     = useState<string | null>(null);
   const [timeLeft,   setTimeLeft]   = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [file,       setFile]       = useState<File | null>(null);
@@ -58,7 +59,6 @@ function JeuPageInner() {
   const [uploadError, setUploadError] = useState('');
   const [gameLoaded,  setGameLoaded]  = useState(false);
   const fileInputRef    = useRef<HTMLInputElement>(null);
-  const timerStarted    = useRef(false);
   const redirectedRef   = useRef(false);
   const timerWasPositive = useRef(false);
 
@@ -74,8 +74,8 @@ function JeuPageInner() {
         .single();
       if (!data) return;
       setGame(data);
-      const endsAt = new Date(data.ends_at).getTime();
-      const secs   = Math.max(0, Math.floor((endsAt - Date.now()) / 1000));
+      setEndsAt(data.ends_at);
+      const secs = Math.max(0, Math.floor((new Date(data.ends_at).getTime() - Date.now()) / 1000));
       setTimeLeft(secs);
       setGameLoaded(true);
     }
@@ -106,18 +106,17 @@ function JeuPageInner() {
 
   // Chrono
   useEffect(() => {
-    if (timeLeft > 0) timerWasPositive.current = true;
-    if (timeLeft <= 0 || timerStarted.current) return;
-    timerStarted.current = true;
+    if (!endsAt) return;
 
     const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) { clearInterval(interval); return 0; }
-        return prev - 1;
-      });
+      const secs = Math.max(0, Math.floor((new Date(endsAt).getTime() - Date.now()) / 1000));
+      if (secs > 0) timerWasPositive.current = true;
+      setTimeLeft(secs);
+      if (secs === 0) clearInterval(interval);
     }, 1000);
+
     return () => clearInterval(interval);
-  }, [timeLeft]);
+  }, [endsAt]);
 
   // Redirige quand le temps est écoulé
   useEffect(() => {
