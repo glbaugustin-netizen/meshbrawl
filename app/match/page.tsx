@@ -44,6 +44,10 @@ const DURATIONS: { id: DurationId; label: string; sub: string }[] = [
   { id: "1sem",  label: "1 SEMAINE",sub: "Chef d'oeuvre" },
 ];
 
+const BLOCKED_DURATIONS: Partial<Record<ModeId, DurationId[]>> = {
+  modelisation: ["10min", "1h", "1sem"],
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const durationMap: Record<string, number> = {
@@ -59,6 +63,18 @@ export default function MatchPage() {
   const [selectedMode, setSelectedMode]         = useState<ModeId | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<DurationId | null>(null);
   const [searching, setSearching]               = useState(false);
+
+  const blockedDurations: DurationId[] = selectedMode
+    ? (BLOCKED_DURATIONS[selectedMode] ?? [])
+    : [];
+
+  const handleModeSelect = (modeId: ModeId) => {
+    const newMode = selectedMode === modeId ? null : modeId;
+    setSelectedMode(newMode);
+    if (newMode && selectedDuration && (BLOCKED_DURATIONS[newMode] ?? []).includes(selectedDuration)) {
+      setSelectedDuration(null);
+    }
+  };
 
   const canLaunch = selectedMode !== null && selectedDuration !== null;
 
@@ -124,9 +140,7 @@ export default function MatchPage() {
               <SelectableCard
                 key={mode.id}
                 selected={selectedMode === mode.id}
-                onClick={() =>
-                  setSelectedMode(selectedMode === mode.id ? null : mode.id)
-                }
+                onClick={() => handleModeSelect(mode.id)}
               >
                 <div className="flex items-start gap-4">
                   {/* Icon */}
@@ -164,30 +178,35 @@ export default function MatchPage() {
           <SectionTitle>CHOISIS TA DUREE</SectionTitle>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {DURATIONS.map((dur) => (
-              <SelectableCard
-                key={dur.id}
-                selected={selectedDuration === dur.id}
-                onClick={() =>
-                  setSelectedDuration(
-                    selectedDuration === dur.id ? null : dur.id
-                  )
-                }
-              >
-                <p
-                  className="font-bangers text-[#1a1a1a] leading-none tracking-wide"
-                  style={{ fontSize: "32px" }}
+            {DURATIONS.map((dur) => {
+              const isDisabled = blockedDurations.includes(dur.id);
+              return (
+                <SelectableCard
+                  key={dur.id}
+                  selected={selectedDuration === dur.id}
+                  disabled={isDisabled}
+                  onClick={() => !isDisabled && setSelectedDuration(selectedDuration === dur.id ? null : dur.id)}
                 >
-                  {dur.label}
-                </p>
-                <p
-                  className="font-archivo text-xs text-[#1a1a1a]/65 mt-1.5 leading-snug"
-                  style={{ fontWeight: 700 }}
-                >
-                  {dur.sub}
-                </p>
-              </SelectableCard>
-            ))}
+                  <p
+                    className="font-bangers text-[#1a1a1a] leading-none tracking-wide"
+                    style={{ fontSize: "32px" }}
+                  >
+                    {dur.label}
+                  </p>
+                  <p
+                    className="font-archivo text-xs text-[#1a1a1a]/65 mt-1.5 leading-snug"
+                    style={{ fontWeight: 700 }}
+                  >
+                    {dur.sub}
+                  </p>
+                  {isDisabled && (
+                    <p className="font-archivo-black text-[9px] uppercase tracking-widest text-[#ff2e2e] mt-2">
+                      INDISPONIBLE
+                    </p>
+                  )}
+                </SelectableCard>
+              );
+            })}
           </div>
         </section>
 
@@ -227,23 +246,28 @@ function SelectableCard({
   children,
   selected,
   onClick,
+  disabled = false,
 }: {
   children: React.ReactNode;
   selected: boolean;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="relative text-left w-full bg-white border-[5px] rounded-[16px] p-6 cursor-pointer transition-all duration-100 hover:-translate-y-1 focus-visible:outline-none"
+      disabled={disabled}
+      className="relative text-left w-full bg-white border-[5px] rounded-[16px] p-6 transition-all duration-100 focus-visible:outline-none"
       style={{
-        borderColor: selected ? "#ff2e2e" : "#1a1a1a",
-        boxShadow: selected ? "6px 6px 0 #ff2e2e" : "6px 6px 0 #1a1a1a",
+        borderColor: disabled ? "#ccc" : selected ? "#ff2e2e" : "#1a1a1a",
+        boxShadow: disabled ? "6px 6px 0 #ccc" : selected ? "6px 6px 0 #ff2e2e" : "6px 6px 0 #1a1a1a",
+        opacity: disabled ? 0.45 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
+        transform: disabled ? "none" : undefined,
       }}
     >
-      {/* CHOISI badge */}
-      {selected && (
+      {selected && !disabled && (
         <span
           className="absolute top-3 right-3 font-bangers text-xs tracking-widest text-white bg-[#ff2e2e] border-[2px] border-[#1a1a1a] px-2 py-0.5 uppercase"
           style={{ borderRadius: "6px", transform: "rotate(2deg)", boxShadow: "2px 2px 0 #1a1a1a" }}
