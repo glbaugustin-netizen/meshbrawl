@@ -69,6 +69,45 @@ const VOTES = [
   },
 ];
 
+const REGLES = [
+  {
+    icon: <IconBan />,
+    accent: "#ff2e2e",
+    title: "IA INTERDITE",
+    description: "L'utilisation de modèles générés par IA est strictement interdite. Si détectée : ban permanent avec possibilité de demande de déban.",
+  },
+  {
+    icon: <IconDownload />,
+    accent: "#ff2e2e",
+    title: "PAS DE MODELES TELECHARGES",
+    description: "Utiliser un modèle 3D téléchargé sur une plateforme tierce est interdit. Exception : arrière-plan ou figuration uniquement, et seulement en mode Animation. Interdit en Modélisation, Texturing et Imaginaire. Ban permanent si détecté.",
+  },
+  {
+    icon: <IconClock />,
+    accent: "#ff8a00",
+    title: "CREE PENDANT LA PARTIE",
+    description: "Ton modèle doit être entièrement créé pendant le temps imparti. Aucun fichier préparé à l'avance n'est autorisé.",
+  },
+  {
+    icon: <IconUsers />,
+    accent: "#ff8a00",
+    title: "PAS DE MULTI-COMPTES",
+    description: "Créer plusieurs comptes pour manipuler l'ELO est interdit. Ban permanent si détecté.",
+  },
+  {
+    icon: <IconVote />,
+    accent: "#ff8a00",
+    title: "VOTES EQUITABLES",
+    description: "S'organiser avec d'autres joueurs pour voter de manière coordonnée est interdit. Vote uniquement sur la qualité du modèle.",
+  },
+  {
+    icon: <IconHeart />,
+    accent: "#0aa36b",
+    title: "FAIRPLAY ET RESPECT",
+    description: "Reste fairplay et garantis une bonne ambiance. Aucun contenu dégradant, violent, sexuel ou ciblant des personnes ou minorités de manière virulente.",
+  },
+];
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CommentJouerPage() {
@@ -285,6 +324,41 @@ export default function CommentJouerPage() {
           </Card>
         </section>
 
+        {/* ── Section 5 — Règles ── */}
+        <section className="flex flex-col gap-6">
+          <SectionTitle>REGLES DU JEU</SectionTitle>
+
+          <div className="flex flex-col gap-3">
+            {REGLES.map((regle) => (
+              <div
+                key={regle.title}
+                className="flex items-start gap-4 p-5 border-[4px] border-[#1a1a1a] rounded-[14px] bg-white"
+                style={{ boxShadow: "5px 5px 0 #1a1a1a" }}
+              >
+                <div
+                  className="w-12 h-12 flex items-center justify-center shrink-0 border-[3px] border-[#1a1a1a]"
+                  style={{
+                    backgroundColor: regle.accent,
+                    borderRadius: "10px",
+                    boxShadow: "3px 3px 0 #1a1a1a",
+                  }}
+                >
+                  {regle.icon}
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <p className="font-archivo-black text-[#1a1a1a] uppercase tracking-wide" style={{ fontSize: "14px" }}>
+                    {regle.title}
+                  </p>
+                  <p className="font-archivo text-[#1a1a1a]/70 text-sm leading-relaxed" style={{ fontWeight: 600 }}>
+                    {regle.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
       </div>
     </main>
   );
@@ -367,6 +441,69 @@ function IconThumbDown() {
       stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z" />
       <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+    </svg>
+  );
+}
+
+function IconBan() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+      stroke="#fff" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+    </svg>
+  );
+}
+
+function IconDownload() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+      stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+      <line x1="4" y1="15" x2="20" y2="15" strokeDasharray="2 2" />
+    </svg>
+  );
+}
+
+function IconClock() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+      stroke="#fff" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function IconUsers() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+      stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function IconVote() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+      stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="9 11 12 14 22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
+
+function IconHeart() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+      stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
     </svg>
   );
 }
