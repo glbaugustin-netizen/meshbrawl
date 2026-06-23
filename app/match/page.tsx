@@ -255,7 +255,7 @@ export default function MatchPage() {
 
         {/* ── Section 2 — Duration ── */}
         <section className="flex flex-col gap-5">
-          <SectionTitle>CHOISIS TA DUREE</SectionTitle>
+          <SectionTitle separator>CHOISIS TA DUREE</SectionTitle>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {DURATIONS.map((dur) => {
