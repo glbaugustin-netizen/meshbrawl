@@ -454,20 +454,9 @@ function BriefContent({ game }: { game: Game }) {
 
   if (mode === 'modelisation') {
     return (
-      <>
-        <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none mb-4" style={{ fontSize: "36px" }}>
-          REPRODUIS CET OBJET FIDELEMENT
-        </p>
-        {game.brief_objet && (
-          <div className="flex flex-wrap gap-3 mb-3">
-            <BriefBadge bg="#2e6bff" color="#fff">{(game.brief_objet as string).toUpperCase()}</BriefBadge>
-          </div>
-        )}
-        <div className="flex flex-wrap gap-3">
-          {game.brief_style && <BriefBadge bg="#ff9500" color="#1a1a1a">{(game.brief_style as string).toUpperCase()}</BriefBadge>}
-          <BriefBadge bg="#ffd400" color="#1a1a1a">MODELISATION</BriefBadge>
-        </div>
-      </>
+      <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none" style={{ fontSize: "36px" }}>
+        REPRODUIS CET OBJET FIDELEMENT
+      </p>
     );
   }
 
