@@ -25,7 +25,6 @@ const DROPDOWN_ITEMS = [
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-  if (pathname.startsWith('/jeu')) return null;
   const [menuOpen,    setMenuOpen]    = useState(false);
   const [user,        setUser]        = useState<User | null>(null);
   const [pseudo,      setPseudo]      = useState('');
@@ -67,6 +66,8 @@ export default function Navbar() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  if (pathname.startsWith('/jeu')) return null;
 
   return (
     <header className="sticky top-0 z-50 w-full" style={{ backgroundColor: "#1a1a1a", borderBottom: "3px solid #1a1a1a" }}>
