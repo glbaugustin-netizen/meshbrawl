@@ -28,11 +28,16 @@ const STEPS = [
   },
 ];
 
-const SOCIALS: { name: string; icon: React.ReactNode }[] = [
-  { name: "Discord", icon: <IconDiscord /> },
-  { name: "TikTok", icon: <IconTikTok /> },
-  { name: "Instagram", icon: <IconInstagram /> },
-  { name: "YouTube", icon: <IconYouTube /> },
+const SOCIALS: { name: string; href: string; icon: React.ReactNode }[] = [
+  { name: "Discord",    href: "#",    icon: <IconDiscord /> },
+  { name: "TikTok",    href: "#",    icon: <IconTikTok /> },
+  { name: "Instagram", href: "#",    icon: <IconInstagram /> },
+  { name: "YouTube",   href: "#",    icon: <IconYouTube /> },
+  {
+    name: "Email",
+    href: "mailto:glbaugustin@gmail.com?subject=Contribution%20MeshBrawl%20%E2%80%94%20Mod%C3%A8le%203D%20%2F%20Blueprint&body=Bonjour%2C%0A%0AJe%20souhaite%20contribuer%20au%20projet%20MeshBrawl%20avec%20le%20fichier%20suivant%20%3A%0A%0A-%20Type%20%3A%20(mod%C3%A8le%203D%20%2F%20blueprint)%0A-%20Logiciel%20utilis%C3%A9%20%3A%0A-%20Description%20%3A%0A%0AMerci%20!",
+    icon: <IconMail />,
+  },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -161,12 +166,17 @@ export default async function Home() {
           <h2 className="font-archivo-black text-xl sm:text-2xl uppercase text-[#1a1a1a] tracking-widest">
             REJOINS LA BAGARRE :
           </h2>
+          <p className="font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a]/50 text-center" style={{ fontWeight: 700 }}>
+            Tu as un modèle 3D ou un blueprint à partager ? Envoie-le nous !
+          </p>
           <div className="flex justify-center gap-4 flex-wrap">
             {SOCIALS.map((social) => (
               <a
                 key={social.name}
-                href="#"
+                href={social.href}
                 aria-label={social.name}
+                target={social.href.startsWith("mailto") ? undefined : "_blank"}
+                rel={social.href.startsWith("mailto") ? undefined : "noopener noreferrer"}
                 className="w-14 h-14 flex items-center justify-center bg-white border-[3px] border-[#1a1a1a] text-[#1a1a1a] hover:bg-[#ffd400] hover:-translate-y-2 transition-[colors,transform] duration-150"
                 style={{ boxShadow: "3px 3px 0 #1a1a1a", borderRadius: "10px" }}
               >
@@ -278,6 +288,16 @@ function IconYouTube() {
       aria-hidden="true"
     >
       <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
+
+function IconMail() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <polyline points="2,4 12,13 22,4" />
     </svg>
   );
 }
