@@ -2,6 +2,8 @@ import Link from "next/link";
 import Button from "@/components/Button";
 import Card from "@/components/Card";
 import Badge from "@/components/Badge";
+import { createClient } from "@/lib/supabase/server";
+import OnlineCounter from "@/components/OnlineCounter";
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 
@@ -35,7 +37,20 @@ const SOCIALS: { name: string; icon: React.ReactNode }[] = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function Home() {
+export default async function Home() {
+  let initialCount = 0;
+  try {
+    const supabase = await createClient();
+    const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { count } = await supabase
+      .from("users")
+      .select("*", { count: "exact", head: true })
+      .gte("last_seen", since);
+    initialCount = count ?? 0;
+  } catch (e) {
+    console.error("Online count error:", e);
+  }
+
   return (
     <main>
       {/* ── HERO ── */}
@@ -114,15 +129,7 @@ export default function Home() {
           </Link>
 
           {/* Online counter */}
-          <div className="flex items-center gap-2">
-            <span
-              className="w-3 h-3 rounded-full border-2 border-[#1a1a1a] animate-blink-dot"
-              style={{ backgroundColor: "#0aa36b" }}
-            />
-            <span className="font-archivo-black text-[#1a1a1a] uppercase tracking-widest text-sm">
-              1 247 BRAWLERS EN LIGNE
-            </span>
-          </div>
+          <OnlineCounter initial={initialCount} />
         </div>
       </section>
 
