@@ -56,9 +56,11 @@ function JeuPageInner() {
   const [uploading,  setUploading]  = useState(false);
   const [submitted,  setSubmitted]  = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const fileInputRef  = useRef<HTMLInputElement>(null);
-  const timerStarted  = useRef(false);
-  const redirectedRef = useRef(false);
+  const [gameLoaded,  setGameLoaded]  = useState(false);
+  const fileInputRef    = useRef<HTMLInputElement>(null);
+  const timerStarted    = useRef(false);
+  const redirectedRef   = useRef(false);
+  const timerWasPositive = useRef(false);
 
   // Charge la partie
   useEffect(() => {
@@ -75,6 +77,7 @@ function JeuPageInner() {
       const endsAt = new Date(data.ends_at).getTime();
       const secs   = Math.max(0, Math.floor((endsAt - Date.now()) / 1000));
       setTimeLeft(secs);
+      setGameLoaded(true);
     }
 
     async function loadPlayers() {
@@ -103,6 +106,7 @@ function JeuPageInner() {
 
   // Chrono
   useEffect(() => {
+    if (timeLeft > 0) timerWasPositive.current = true;
     if (timeLeft <= 0 || timerStarted.current) return;
     timerStarted.current = true;
 
@@ -117,11 +121,17 @@ function JeuPageInner() {
 
   // Redirige quand le temps est écoulé
   useEffect(() => {
-    if (timeLeft === 0 && gameId && !redirectedRef.current) {
+    if (
+      timeLeft === 0 &&
+      gameId &&
+      !redirectedRef.current &&
+      gameLoaded &&
+      timerWasPositive.current
+    ) {
       redirectedRef.current = true;
       router.push(`/vote?gameId=${gameId}`);
     }
-  }, [timeLeft, gameId, router]);
+  }, [timeLeft, gameId, router, gameLoaded]);
 
   // Redirige quand tous ont soumis
   useEffect(() => {

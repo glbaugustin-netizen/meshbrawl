@@ -23,9 +23,23 @@ export default function OnlineCounter({ initial }: { initial: number }) {
     const interval = setInterval(() => {
       fetch("/api/users/ping", { method: "POST" }).catch(() => {});
       fetchCount();
-    }, 60_000);
+    }, 15_000);
 
-    return () => clearInterval(interval);
+    const channel = supabase
+      .channel('online-users')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'users',
+      }, () => {
+        fetchCount();
+      })
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
