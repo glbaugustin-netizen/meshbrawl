@@ -117,6 +117,12 @@ export default function ProfilPage() {
   const [modalAlert,    setModalAlert]    = useState<AlertMsg>(null);
   const [modalLoading,  setModalLoading]  = useState(false);
 
+  const [deleteModal,    setDeleteModal]    = useState(false);
+  const [deleteInput,    setDeleteInput]    = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteLoading,  setDeleteLoading]  = useState(false);
+  const [deleteAlert,    setDeleteAlert]    = useState<AlertMsg>(null);
+
   useEffect(() => {
     let mounted = true;
 
@@ -232,6 +238,40 @@ export default function ProfilPage() {
 
   const closeEmailModal = () => { setEmailModal(false); setNewEmail(''); setModalAlert(null); };
   const closePwdModal   = () => { setPasswordModal(false); setNewPassword(''); setConfirmPwd(''); setModalAlert(null); };
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    setDeleteAlert(null);
+
+    if (!isGoogleUser) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profile?.email ?? '',
+        password: deletePassword,
+      });
+      if (signInError) {
+        setDeleteAlert({ text: "Mot de passe incorrect.", ok: false });
+        setDeleteLoading(false);
+        return;
+      }
+    } else {
+      if (deleteInput !== "SUPPRIMER") {
+        setDeleteAlert({ text: 'Tape "SUPPRIMER" pour confirmer.', ok: false });
+        setDeleteLoading(false);
+        return;
+      }
+    }
+
+    const res = await fetch("/api/account/delete", { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      setDeleteAlert({ text: data.error ?? "Erreur lors de la suppression.", ok: false });
+      setDeleteLoading(false);
+      return;
+    }
+
+    await supabase.auth.signOut();
+    router.push("/");
+  };
 
   const handleSignOut = () => {
     supabase.auth.signOut().catch(console.error);
@@ -416,6 +456,13 @@ export default function ProfilPage() {
             <Button variant="secondary" onClick={handleSignOut} className="!block !w-full !text-base !py-3 !rounded-[12px] !bg-[#ff2e2e] !text-white !shadow-[0_6px_0_#8b0000] hover:!shadow-[0_9px_0_#8b0000] hover:!-translate-y-[3px]">
               SE DECONNECTER
             </Button>
+            <Button
+              variant="secondary"
+              onClick={() => { setDeleteAlert(null); setDeleteInput(''); setDeletePassword(''); setDeleteModal(true); }}
+              className="!block !w-full !text-base !py-3 !rounded-[12px] !bg-white !text-[#ff2e2e] !border-[#ff2e2e] !shadow-[0_6px_0_#8b0000] hover:!shadow-[0_9px_0_#8b0000] hover:!-translate-y-[3px]"
+            >
+              SUPPRIMER MON COMPTE
+            </Button>
           </Card>
         </div>
 
@@ -435,6 +482,55 @@ export default function ProfilPage() {
               {modalLoading ? "..." : "CONFIRMER"}
             </Button>
             <Button variant="secondary" onClick={closeEmailModal} className="!flex-1 !text-base !py-3 !rounded-[12px] !shadow-[0_6px_0_#1a1a1a]">
+              ANNULER
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Modal suppression ── */}
+      {deleteModal && (
+        <Modal title="SUPPRIMER MON COMPTE" onClose={() => setDeleteModal(false)}>
+          {deleteAlert && (
+            <div className="rounded-[10px] border-[3px] px-4 py-3 font-archivo-black text-xs uppercase tracking-wide"
+              style={{ borderColor: deleteAlert.ok ? '#0aa36b' : '#ff2e2e', color: deleteAlert.ok ? '#0aa36b' : '#ff2e2e', backgroundColor: '#fff', boxShadow: `3px 3px 0 ${deleteAlert.ok ? '#0aa36b' : '#ff2e2e'}` }}>
+              {deleteAlert.text}
+            </div>
+          )}
+          <p className="font-archivo text-[#1a1a1a]/70 text-sm leading-relaxed" style={{ fontWeight: 700 }}>
+            Cette action est irréversible. Toutes tes données seront supprimées définitivement.
+          </p>
+          {isGoogleUser ? (
+            <EditField
+              label='TAPE "SUPPRIMER" POUR CONFIRMER'
+              id="delete-confirm"
+              value={deleteInput}
+              onChange={setDeleteInput}
+              placeholder="SUPPRIMER"
+            />
+          ) : (
+            <EditField
+              label="MOT DE PASSE ACTUEL"
+              id="delete-password"
+              value={deletePassword}
+              onChange={setDeletePassword}
+              placeholder="••••••••"
+            />
+          )}
+          <div className="flex gap-3">
+            <Button
+              variant="primary"
+              onClick={handleDeleteAccount}
+              disabled={deleteLoading || (!isGoogleUser && !deletePassword) || (isGoogleUser && deleteInput !== "SUPPRIMER")}
+              className="!flex-1 !text-base !py-3 !rounded-[12px] !bg-[#ff2e2e] !shadow-[0_6px_0_#8b0000] disabled:!opacity-60 disabled:!cursor-not-allowed disabled:!translate-y-0 disabled:!shadow-[0_6px_0_#8b0000]"
+            >
+              {deleteLoading ? "..." : "SUPPRIMER"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteModal(false)}
+              className="!flex-1 !text-base !py-3 !rounded-[12px] !shadow-[0_6px_0_#1a1a1a]"
+            >
               ANNULER
             </Button>
           </div>
