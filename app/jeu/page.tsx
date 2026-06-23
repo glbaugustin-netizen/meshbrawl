@@ -424,17 +424,15 @@ function JeuPageInner() {
               </div>
             )}
 
-            {!submitted && (
-              <div className="flex justify-center pt-4">
-                <button
-                  type="button"
-                  onClick={() => setQuitModal1(true)}
-                  className="font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a]/40 underline underline-offset-4 hover:text-[#ff2e2e] transition-colors duration-100"
-                >
-                  Quitter la partie
-                </button>
-              </div>
-            )}
+            <div className="flex justify-center pt-4">
+              <button
+                type="button"
+                onClick={() => setQuitModal1(true)}
+                className="font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a]/40 underline underline-offset-4 hover:text-[#ff2e2e] transition-colors duration-100"
+              >
+                Quitter la partie
+              </button>
+            </div>
           </div>
 
           {/* ── Sidebar — Player statuses ── */}
