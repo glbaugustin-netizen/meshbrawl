@@ -72,7 +72,7 @@ export async function POST(
   // 5. Calcule l'elo_change et met à jour game_players + users
   for (const player of players) {
     const pts       = pointsMap[player.id]
-    const eloChange = maxPoints > 0 ? Math.round((pts / maxPoints) * 100) : 0
+    const eloChange = maxPoints > 0 ? Math.round((pts / maxPoints) * (totalPlayers * 10)) : 0
 
     await supabase
       .from('game_players')
