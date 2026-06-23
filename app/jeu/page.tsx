@@ -103,7 +103,14 @@ function JeuPageInner() {
       }, () => loadPlayers())
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    const pollInterval = setInterval(() => {
+      loadPlayers();
+    }, 5000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollInterval);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 

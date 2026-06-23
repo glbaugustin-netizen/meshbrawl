@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
@@ -24,6 +24,8 @@ const DROPDOWN_ITEMS = [
 
 export default function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
+  if (pathname.startsWith('/jeu')) return null;
   const [menuOpen,    setMenuOpen]    = useState(false);
   const [user,        setUser]        = useState<User | null>(null);
   const [pseudo,      setPseudo]      = useState('');
