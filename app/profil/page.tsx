@@ -95,6 +95,7 @@ export default function ProfilPage() {
 
   const [profile,  setProfile]  = useState<Profile | null>(null);
   const [loading,  setLoading]  = useState(true);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [editing,  setEditing]  = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [alert,    setAlert]    = useState<AlertMsg>(null);
@@ -132,6 +133,8 @@ export default function ProfilPage() {
         setLoading(false);
         return;
       }
+      const provider = session.user.app_metadata?.provider ?? 'email';
+      setIsGoogleUser(provider === 'google');
       try {
         const { data } = await supabase
           .from('users')
@@ -380,12 +383,36 @@ export default function ProfilPage() {
               </Button>
             )}
 
-            <Button variant="secondary" onClick={() => { setModalAlert(null); setEmailModal(true); }} className="!block !w-full !text-base !py-3 !rounded-[12px] !shadow-[0_6px_0_#1a1a1a] hover:!shadow-[0_9px_0_#1a1a1a] hover:!-translate-y-[3px]">
-              CHANGER L&apos;EMAIL
-            </Button>
-            <Button variant="secondary" onClick={() => { setModalAlert(null); setPasswordModal(true); }} className="!block !w-full !text-base !py-3 !rounded-[12px] !shadow-[0_6px_0_#1a1a1a] hover:!shadow-[0_9px_0_#1a1a1a] hover:!-translate-y-[3px]">
-              CHANGER LE MOT DE PASSE
-            </Button>
+            <div className="flex flex-col gap-1">
+              <Button
+                variant="secondary"
+                onClick={!isGoogleUser ? () => { setModalAlert(null); setEmailModal(true); } : undefined}
+                disabled={isGoogleUser}
+                className={`!block !w-full !text-base !py-3 !rounded-[12px] !shadow-[0_6px_0_#1a1a1a] hover:!shadow-[0_9px_0_#1a1a1a] hover:!-translate-y-[3px] ${isGoogleUser ? '!opacity-40 !cursor-not-allowed hover:!translate-y-0 hover:!shadow-[0_6px_0_#1a1a1a]' : ''}`}
+              >
+                CHANGER L&apos;EMAIL
+              </Button>
+              {isGoogleUser && (
+                <p className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a]/40 text-center">
+                  GERE PAR GOOGLE
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <Button
+                variant="secondary"
+                onClick={!isGoogleUser ? () => { setModalAlert(null); setPasswordModal(true); } : undefined}
+                disabled={isGoogleUser}
+                className={`!block !w-full !text-base !py-3 !rounded-[12px] !shadow-[0_6px_0_#1a1a1a] hover:!shadow-[0_9px_0_#1a1a1a] hover:!-translate-y-[3px] ${isGoogleUser ? '!opacity-40 !cursor-not-allowed hover:!translate-y-0 hover:!shadow-[0_6px_0_#1a1a1a]' : ''}`}
+              >
+                CHANGER LE MOT DE PASSE
+              </Button>
+              {isGoogleUser && (
+                <p className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a]/40 text-center">
+                  GERE PAR GOOGLE
+                </p>
+              )}
+            </div>
             <Button variant="secondary" onClick={handleSignOut} className="!block !w-full !text-base !py-3 !rounded-[12px] !bg-[#ff2e2e] !text-white !shadow-[0_6px_0_#8b0000] hover:!shadow-[0_9px_0_#8b0000] hover:!-translate-y-[3px]">
               SE DECONNECTER
             </Button>
