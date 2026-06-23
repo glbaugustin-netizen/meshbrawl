@@ -34,6 +34,23 @@ const stylesAnim = [
   'Slow motion', 'Loop parfaite', 'Manga / anime', 'Horror / creepy',
 ]
 
+const blueprints = [
+  'https://www.the-blueprints.com/blueprints/cars/audi/83215/view/audi_a1_sportback_2018/',
+  'https://www.the-blueprints.com/blueprints/cars/bmwcars/27529/view/bmw_3-series_e90/',
+  'https://www.the-blueprints.com/blueprints/cars/porsche/77238/view/porsche_356c_1964/',
+  'https://www.the-blueprints.com/blueprints/cars/dodge/62376/view/dodge_challenger_1970/',
+  'https://www.the-blueprints.com/blueprints/cars/renault/59413/view/renault_5_gtl_5-door_1983/',
+  'https://www.the-blueprints.com/blueprints/motorcycles/bmwmotor/73239/view/bmw_k75s_1985/',
+  'https://www.the-blueprints.com/blueprints/tanks/tanks-m/87718/view/m1_abrams_105mm/',
+  'https://www.the-blueprints.com/blueprints/tanks/tanks-m/75189/view/m109_155mm_spg/',
+  'https://www.the-blueprints.com/blueprints/modernplanes/dassault/73549/view/dassault_mirage_2000b/',
+  'https://www.the-blueprints.com/blueprints/modernplanes/lockheed/27152/view/lockheed_c-5_galaxy/',
+  'https://drawingdatabase.com/lockheed-martin-f-22-raptor/',
+  'https://drawingdatabase.com/honda-gold-wing/',
+  'https://drawingdatabase.com/volvo-vnl-tractor-truck-2018/',
+  'https://drawingdatabase.com/dodge-challenger-1970/',
+]
+
 function random<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
@@ -95,7 +112,11 @@ export async function POST(
       brief = { brief_action: 'LIBRE' }
     }
   } else if (game.mode === 'modelisation') {
-    brief = { brief_objet: random(objets), brief_style: random(styles) }
+    brief = {
+      brief_objet:   random(objets),
+      brief_style:   random(styles),
+      blueprint_url: random(blueprints),
+    }
   }
 
   const now = new Date()
