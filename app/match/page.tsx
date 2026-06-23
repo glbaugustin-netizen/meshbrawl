@@ -47,6 +47,9 @@ const DURATIONS: { id: DurationId; label: string; sub: string }[] = [
 
 const BLOCKED_DURATIONS: Partial<Record<ModeId, DurationId[]>> = {
   modelisation: ["10min", "1h", "1sem"],
+  texturing:    ["1sem"],
+  animation:    ["1sem"],
+  imaginaire:   ["1sem"],
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
