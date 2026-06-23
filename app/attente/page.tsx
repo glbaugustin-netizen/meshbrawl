@@ -216,13 +216,29 @@ function AttentePageInner() {
 
   // Quitter la partie
   const handleQuit = async () => {
-    if (gameId && currentUserId) {
+    if (!gameId || !currentUserId) { router.push('/match'); return; }
+
+    // Supprime le joueur de la partie
+    await supabase
+      .from('game_players')
+      .delete()
+      .eq('game_id', gameId)
+      .eq('user_id', currentUserId);
+
+    // Vérifie s'il reste des joueurs
+    const { count } = await supabase
+      .from('game_players')
+      .select('*', { count: 'exact', head: true })
+      .eq('game_id', gameId);
+
+    // Si plus personne, supprime la partie
+    if (count === 0) {
       await supabase
-        .from('game_players')
+        .from('games')
         .delete()
-        .eq('game_id', gameId)
-        .eq('user_id', currentUserId);
+        .eq('id', gameId);
     }
+
     router.push('/match');
   };
 
