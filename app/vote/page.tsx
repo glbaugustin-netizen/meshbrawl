@@ -61,7 +61,6 @@ function VotePageInner() {
   const [currentUserId,   setCurrentUserId]   = useState<string | null>(null);
   const [votingStartedAt, setVotingStartedAt] = useState<number | null>(null);
   const [currentIndex,    setCurrentIndex]    = useState(0);
-  const [localVotes,      setLocalVotes]      = useState<Record<number, string>>({});
   const [etoileUtilisee,  setEtoileUtilisee]  = useState(false);
   const [flashColor,      setFlashColor]      = useState<string | null>(null);
   const [loading,         setLoading]         = useState(true);
@@ -193,7 +192,6 @@ function VotePageInner() {
     });
     if (voteErr) console.error('Erreur vote:', voteErr.message);
 
-    setLocalVotes(v => ({ ...v, [currentIndex]: type }));
     if (type === 'etoile') setEtoileUtilisee(true);
 
     const colors: Record<typeof type, string> = {
