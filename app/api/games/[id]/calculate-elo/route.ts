@@ -116,30 +116,29 @@ export async function POST(
     .eq('id', gameId)
 
   // 8. Supprime les fichiers de soumission du bucket
-  const { data: submissions } = await supabase
-    .from('game_players')
-    .select('submission_url')
-    .eq('game_id', gameId)
-    .not('submission_url', 'is', null)
+  // Suppression via listing du dossier
+  const adminClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
-  if (submissions && submissions.length > 0) {
-    const paths = submissions
-      .map((s) => {
-        if (!s.submission_url) return null
-        const match = s.submission_url.match(/\/submissions\/(.+?)(\?|$)/)
-        return match ? match[1] : null
-      })
-      .filter(Boolean) as string[]
+  const { data: folders } = await adminClient.storage
+    .from("submissions")
+    .list(gameId);
 
-    if (paths.length > 0) {
-      const adminClient = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
-      const { error: storageError } = await adminClient.storage
-        .from('submissions')
-        .remove(paths)
-      if (storageError) console.error('Erreur suppression fichiers:', storageError)
+  if (folders && folders.length > 0) {
+    for (const folder of folders) {
+      const { data: files } = await adminClient.storage
+        .from("submissions")
+        .list(`${gameId}/${folder.name}`);
+
+      if (files && files.length > 0) {
+        const paths = files.map((f) => `${gameId}/${folder.name}/${f.name}`);
+        const { error } = await adminClient.storage
+          .from("submissions")
+          .remove(paths);
+        if (error) console.error("Erreur suppression:", error);
+      }
     }
   }
 
