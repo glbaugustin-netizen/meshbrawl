@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from "@supabase/supabase-js"
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
@@ -131,7 +132,11 @@ export async function POST(
       .filter(Boolean) as string[]
 
     if (paths.length > 0) {
-      const { error: storageError } = await supabase.storage
+      const adminClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      const { error: storageError } = await adminClient.storage
         .from('submissions')
         .remove(paths)
       if (storageError) console.error('Erreur suppression fichiers:', storageError)
