@@ -97,16 +97,26 @@ export async function POST(
     }
   }
 
-  // 6. Calcule les rangs par points reçus
+  // 6. Calcule les rangs avec gestion des ex-aequo
   const sorted = players
     .map((p) => ({ ...p, pts: pointsMap[p.id] }))
-    .sort((a, b) => b.pts - a.pts)
+    .sort((a, b) => b.pts - a.pts);
 
+  let currentRank = 1;
   for (let i = 0; i < sorted.length; i++) {
-    await supabase
-      .from('game_players')
-      .update({ rank: i + 1 })
-      .eq('id', sorted[i].id)
+    // Si même score que le précédent → même rang
+    if (i > 0 && sorted[i].pts === sorted[i - 1].pts) {
+      await supabase
+        .from('game_players')
+        .update({ rank: currentRank })
+        .eq('id', sorted[i].id);
+    } else {
+      currentRank = i + 1;
+      await supabase
+        .from('game_players')
+        .update({ rank: currentRank })
+        .eq('id', sorted[i].id);
+    }
   }
 
   // 7. Marque la partie comme terminée
