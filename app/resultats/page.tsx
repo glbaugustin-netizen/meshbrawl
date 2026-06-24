@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import Button from "@/components/Button";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
