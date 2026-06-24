@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { Suspense, useState, useEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -59,17 +59,16 @@ function VotePageInner() {
 
   const [rendus,          setRendus]          = useState<Rendu[]>([]);
   const [currentUserId,   setCurrentUserId]   = useState<string | null>(null);
-  const [rendusIndex,     setRendusIndex]     = useState(0);
+  const [votingStartedAt, setVotingStartedAt] = useState<number | null>(null);
+  const [currentIndex,    setCurrentIndex]    = useState(0);
+  const [localVotes,      setLocalVotes]      = useState<Record<number, string>>({});
   const [etoileUtilisee,  setEtoileUtilisee]  = useState(false);
-  const [timer,           setTimer]           = useState(VOTE_DURATION);
   const [flashColor,      setFlashColor]      = useState<string | null>(null);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState('');
 
-  const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hasVotedRef   = useRef(false);
-  const rendusIndexRef = useRef(rendusIndex);
-  rendusIndexRef.current = rendusIndex;
+  const hasVotedMap   = useRef<Record<number, boolean>>({});
+  const redirectedRef = useRef(false);
 
   // Load model-viewer CDN script once
   useEffect(() => {
@@ -120,6 +119,28 @@ function VotePageInner() {
         }));
 
         setRendus(list);
+
+        // Récupère ou crée voting_started_at
+        const { data: gameData } = await supabase
+          .from('games')
+          .select('voting_started_at')
+          .eq('id', gameId)
+          .single();
+
+        let startedAt: number;
+
+        if (gameData?.voting_started_at) {
+          startedAt = new Date(gameData.voting_started_at).getTime();
+        } else {
+          const now = new Date().toISOString();
+          await supabase
+            .from('games')
+            .update({ voting_started_at: now })
+            .eq('id', gameId);
+          startedAt = new Date(now).getTime();
+        }
+
+        setVotingStartedAt(startedAt);
       } catch (e) {
         console.error(e);
         setError('Erreur de chargement');
@@ -132,69 +153,36 @@ function VotePageInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 
-  // Advance to next render or redirect
-  const advance = useCallback(async () => {
-    const idx = rendusIndexRef.current;
-    if (idx + 1 >= rendus.length) {
-      try {
-        await fetch(`/api/games/${gameId}/calculate-elo`, { method: 'POST' });
-      } catch (e) {
-        console.error('Erreur calcul ELO:', e);
-      }
-      router.push(`/resultats?gameId=${gameId}`);
-    } else {
-      setRendusIndex(idx + 1);
-    }
-  }, [router, rendus.length, gameId]);
-
-  // Timer — resets on each new render
+  // Calcule l'index courant basé sur voting_started_at
   useEffect(() => {
-    if (loading || rendus.length === 0) return;
+    if (!votingStartedAt || rendus.length === 0) return;
 
-    setTimer(VOTE_DURATION);
-    setFlashColor(null);
-    hasVotedRef.current = false;
-
-    timerRef.current = setInterval(() => {
-      setTimer((t) => {
-        if (t <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          timerRef.current = null;
-          return 0;
+    const calcIndex = () => {
+      const elapsed = Date.now() - votingStartedAt;
+      const idx = Math.floor(elapsed / (VOTE_DURATION * 1000));
+      if (idx >= rendus.length) {
+        if (!redirectedRef.current) {
+          redirectedRef.current = true;
+          fetch(`/api/games/${gameId}/calculate-elo`, { method: 'POST' }).catch(() => {});
+          router.push(`/resultats?gameId=${gameId}`);
         }
-        return t - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = null;
+      } else {
+        setCurrentIndex(idx);
+      }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rendusIndex, loading, rendus.length]);
 
-  // Auto-advance when timer hits 0 (only if user hasn't voted)
-  useEffect(() => {
-    if (timer !== 0) return;
-    const t = setTimeout(() => {
-      if (!hasVotedRef.current) advance();
-    }, 500);
-    return () => clearTimeout(t);
-  }, [timer, advance]);
+    calcIndex();
+    const interval = setInterval(calcIndex, 1000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [votingStartedAt, rendus.length, gameId, router]);
 
   // Vote handler
   const handleVote = async (type: "bien" | "mal" | "etoile") => {
-    if (hasVotedRef.current || !currentUserId || !gameId) return;
-    hasVotedRef.current = true;
+    if (hasVotedMap.current[currentIndex] || !currentUserId || !gameId) return;
+    hasVotedMap.current[currentIndex] = true;
 
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
-    const rendu = rendus[rendusIndexRef.current];
-
-    if (type === "etoile") setEtoileUtilisee(true);
+    const rendu = rendus[currentIndex];
 
     // Insère le vote en DB
     const { error: voteErr } = await supabase.from('votes').insert({
@@ -205,17 +193,16 @@ function VotePageInner() {
     });
     if (voteErr) console.error('Erreur vote:', voteErr.message);
 
+    setLocalVotes(v => ({ ...v, [currentIndex]: type }));
+    if (type === 'etoile') setEtoileUtilisee(true);
+
     const colors: Record<typeof type, string> = {
       bien:   "#0aa36b44",
       mal:    "#ff2e2e44",
       etoile: "#ffd40066",
     };
     setFlashColor(colors[type]);
-
-    setTimeout(() => {
-      setFlashColor(null);
-      advance();
-    }, 400);
+    setTimeout(() => setFlashColor(null), 400);
   };
 
   // ── Render states ──────────────────────────────────────────────────────────
@@ -268,9 +255,13 @@ function VotePageInner() {
     );
   }
 
-  const rendu       = rendus[rendusIndex];
-  const progressPct = ((rendusIndex + 1) / rendus.length) * 100;
-  const isUrgent    = timer <= 5;
+  const rendu       = rendus[currentIndex];
+  const progressPct = rendus.length > 0 ? ((currentIndex + 1) / rendus.length) * 100 : 0;
+  const timeInCurrentSlot = votingStartedAt
+    ? Math.floor((Date.now() - votingStartedAt) % (VOTE_DURATION * 1000) / 1000)
+    : 0;
+  const timer    = VOTE_DURATION - timeInCurrentSlot;
+  const isUrgent = timer <= 5;
 
   return (
     <main className="min-h-[calc(100vh-64px)] px-4 py-10">
@@ -290,7 +281,7 @@ function VotePageInner() {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]">
-              RENDU {rendusIndex + 1} SUR {rendus.length}
+              RENDU {currentIndex + 1} SUR {rendus.length}
             </span>
             <span
               className="font-bangers tabular-nums transition-colors duration-300"
