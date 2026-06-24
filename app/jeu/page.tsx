@@ -234,17 +234,10 @@ function JeuPageInner() {
       .eq('game_id', gameId);
 
     if (count === 0) {
-      // Plus personne → supprime les fichiers et la partie
+      // Plus personne → supprime les fichiers via listing
       await fetch(`/api/games/${gameId}/calculate-elo`, { method: 'POST' }).catch(() => {});
+      // Supprime la partie
       await supabase.from('games').delete().eq('id', gameId);
-    } else {
-      // Il reste des joueurs → juste nettoyer son propre fichier
-      try {
-        // On appelle cleanup pour nettoyer les fichiers orphelins
-        await fetch(`/api/games/${gameId}/cleanup`, { method: 'POST' }).catch(() => {});
-      } catch (e) {
-        console.error('Cleanup error:', e);
-      }
     }
 
     router.push('/match');
