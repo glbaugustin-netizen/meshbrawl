@@ -37,7 +37,7 @@ interface Rendu {
   type:   'glb' | 'video';
 }
 
-const VOTE_DURATION = 15;
+const VOTE_DURATION = 60;
 
 // ─── Page wrapper ─────────────────────────────────────────────────────────────
 
@@ -61,6 +61,7 @@ function VotePageInner() {
   const [currentUserId,   setCurrentUserId]   = useState<string | null>(null);
   const [votingStartedAt, setVotingStartedAt] = useState<number | null>(null);
   const [currentIndex,    setCurrentIndex]    = useState(0);
+  const [totalVoters,     setTotalVoters]     = useState(0);
   const [etoileUtilisee,  setEtoileUtilisee]  = useState(false);
   const [flashColor,      setFlashColor]      = useState<string | null>(null);
   const [loading,         setLoading]         = useState(true);
@@ -118,6 +119,8 @@ function VotePageInner() {
         }));
 
         setRendus(list);
+        // Nombre de voters = nombre de soumissions (chaque joueur vote pour les autres)
+        setTotalVoters((players ?? []).length);
 
         // Récupère ou crée voting_started_at
         const { data: gameData } = await supabase
@@ -175,6 +178,35 @@ function VotePageInner() {
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [votingStartedAt, rendus.length, gameId, router]);
+
+  // Avance si tous ont voté sur le rendu courant
+  useEffect(() => {
+    if (!gameId || !votingStartedAt || rendus.length === 0) return;
+
+    const checkAllVoted = async () => {
+      const rendu = rendus[currentIndex];
+      if (!rendu) return;
+
+      const { count } = await supabase
+        .from('votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('game_id', gameId)
+        .eq('target_player_id', rendu.id);
+
+      if (count !== null && totalVoters > 0 && count >= totalVoters - 1) {
+        const newStartedAt = Date.now() - ((currentIndex + 1) * VOTE_DURATION * 1000);
+        await supabase
+          .from('games')
+          .update({ voting_started_at: new Date(newStartedAt).toISOString() })
+          .eq('id', gameId);
+        setVotingStartedAt(newStartedAt);
+      }
+    };
+
+    const interval = setInterval(checkAllVoted, 3000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, currentIndex, votingStartedAt, rendus, totalVoters, supabase]);
 
   // Vote handler
   const handleVote = async (type: "bien" | "mal" | "etoile") => {
