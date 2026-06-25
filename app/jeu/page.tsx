@@ -205,59 +205,12 @@ function JeuPageInner() {
 
   const handleQuit = async () => {
     setQuitting(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session || !gameId) { setQuitting(false); return; }
+    if (!gameId) { setQuitting(false); return; }
 
-    const { data: userData } = await supabase
-      .from('users')
-      .select('elo')
-      .eq('id', session.user.id)
-      .single();
-
-    if (userData) {
-      await supabase
-        .from('users')
-        .update({ elo: Math.max(0, (userData.elo ?? 1000) - 20) })
-        .eq('id', session.user.id);
-    }
-
-    await supabase
-      .from('game_players')
-      .delete()
-      .eq('game_id', gameId)
-      .eq('user_id', session.user.id);
-
-    // Vérifie s'il reste des joueurs
-    const { count } = await supabase
-      .from('game_players')
-      .select('*', { count: 'exact', head: true })
-      .eq('game_id', gameId);
-
-    if (count === 0) {
-      // Tente de supprimer les fichiers (peut échouer si anon key)
-      try {
-        const { data: folders } = await supabase.storage
-          .from('submissions')
-          .list(gameId);
-
-        if (folders && folders.length > 0) {
-          for (const folder of folders) {
-            const { data: files } = await supabase.storage
-              .from('submissions')
-              .list(`${gameId}/${folder.name}`);
-            if (files && files.length > 0) {
-              const paths = files.map((f) => `${gameId}/${folder.name}/${f.name}`);
-              await supabase.storage.from('submissions').remove(paths);
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Storage cleanup error:', e);
-      } finally {
-        // Toujours supprimer la partie même si le cleanup échoue
-        await supabase.from('games').delete().eq('id', gameId);
-      }
-    }
+    // Tout est fait côté serveur (service role) pour bypasser les RLS :
+    // pénalité ELO, suppression du joueur, et suppression de la partie + fichiers
+    // si plus aucun joueur ne reste.
+    await fetch(`/api/games/${gameId}/quit`, { method: 'POST' }).catch(() => {});
 
     router.push('/match');
   };
