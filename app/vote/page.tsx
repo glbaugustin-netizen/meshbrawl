@@ -66,6 +66,7 @@ function VotePageInner() {
   const [totalVoters,     setTotalVoters]     = useState(0);
   const [etoileUtilisee,  setEtoileUtilisee]  = useState(false);
   const [flashColor,      setFlashColor]      = useState<string | null>(null);
+  const [timer,           setTimer]           = useState(VOTE_DURATION);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState('');
 
@@ -131,7 +132,7 @@ function VotePageInner() {
         // Nombre de voters = nombre de soumissions (chaque joueur vote pour les autres)
         setTotalVoters((players ?? []).length);
 
-        // Récupère ou crée voting_started_at
+        // Récupère ou crée voting_started_at (anti race condition)
         const { data: gameData } = await supabase
           .from('games')
           .select('voting_started_at')
@@ -143,12 +144,24 @@ function VotePageInner() {
         if (gameData?.voting_started_at) {
           startedAt = new Date(gameData.voting_started_at).getTime();
         } else {
-          const now = new Date().toISOString();
-          await supabase
+          // Attendre un délai aléatoire et re-vérifier avant de setter
+          await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
+          const { data: gameData2 } = await supabase
             .from('games')
-            .update({ voting_started_at: now })
-            .eq('id', gameId);
-          startedAt = new Date(now).getTime();
+            .select('voting_started_at')
+            .eq('id', gameId)
+            .single();
+
+          if (gameData2?.voting_started_at) {
+            startedAt = new Date(gameData2.voting_started_at).getTime();
+          } else {
+            const now = new Date().toISOString();
+            await supabase
+              .from('games')
+              .update({ voting_started_at: now })
+              .eq('id', gameId);
+            startedAt = new Date(now).getTime();
+          }
         }
 
         setVotingStartedAt(startedAt);
@@ -170,15 +183,22 @@ function VotePageInner() {
 
     const calcIndex = () => {
       const elapsed = Date.now() - votingStartedAt;
+
+      if (elapsed < 0) return;
+
       const idx = Math.floor(elapsed / (VOTE_DURATION * 1000));
+
       if (idx >= rendus.length) {
-        if (!redirectedRef.current) {
+        if (elapsed > VOTE_DURATION * 1000 * rendus.length && !redirectedRef.current) {
           redirectedRef.current = true;
           fetch(`/api/games/${gameId}/calculate-elo`, { method: 'POST' }).catch(() => {});
           router.push(`/resultats?gameId=${gameId}`);
         }
       } else {
-        setCurrentIndex(idx);
+        setCurrentIndex((prev) => {
+          if (prev !== idx) setFlashColor(null);
+          return idx;
+        });
       }
     };
 
@@ -187,6 +207,22 @@ function VotePageInner() {
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [votingStartedAt, rendus.length, gameId, router]);
+
+  // Met à jour le timer chaque 500ms
+  useEffect(() => {
+    if (!votingStartedAt || rendus.length === 0) return;
+
+    const updateTimer = () => {
+      const elapsed = Date.now() - votingStartedAt;
+      const timeInSlot = elapsed % (VOTE_DURATION * 1000);
+      const remaining = Math.max(0, VOTE_DURATION - Math.floor(timeInSlot / 1000));
+      setTimer(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 500);
+    return () => clearInterval(interval);
+  }, [votingStartedAt, rendus.length]);
 
   // Avance si tous ont voté sur le rendu courant
   useEffect(() => {
@@ -296,11 +332,7 @@ function VotePageInner() {
 
   const rendu       = rendus[currentIndex];
   const progressPct = rendus.length > 0 ? ((currentIndex + 1) / rendus.length) * 100 : 0;
-  const timeInCurrentSlot = votingStartedAt
-    ? Math.floor((Date.now() - votingStartedAt) % (VOTE_DURATION * 1000) / 1000)
-    : 0;
-  const timer    = VOTE_DURATION - timeInCurrentSlot;
-  const isUrgent = timer <= 5;
+  const isUrgent    = timer <= 10;
 
   return (
     <main className="min-h-[calc(100vh-64px)] px-4 py-10">
