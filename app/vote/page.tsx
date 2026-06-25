@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import GameChat from "@/components/GameChat";
 
 // ─── model-viewer type declaration ────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ function VotePageInner() {
 
   const [rendus,          setRendus]          = useState<Rendu[]>([]);
   const [currentUserId,   setCurrentUserId]   = useState<string | null>(null);
+  const [currentPseudo,   setCurrentPseudo]   = useState('');
   const [votingStartedAt, setVotingStartedAt] = useState<number | null>(null);
   const [currentIndex,    setCurrentIndex]    = useState(0);
   const [totalVoters,     setTotalVoters]     = useState(0);
@@ -88,6 +90,13 @@ function VotePageInner() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { setError('Non connecté'); setLoading(false); return; }
         setCurrentUserId(user.id);
+
+        const { data: pseudoData } = await supabase
+          .from('users')
+          .select('pseudo')
+          .eq('id', user.id)
+          .single();
+        if (pseudoData) setCurrentPseudo(pseudoData.pseudo);
 
         // Vérifie si l'utilisateur a déjà voté
         const { data: existingVotes } = await supabase
@@ -424,6 +433,16 @@ function VotePageInner() {
         >
           L&apos;auteur sera révélé après les votes • L&apos;étoile ne peut être donnée qu&apos;une seule fois
         </p>
+
+        {gameId && currentUserId && currentPseudo && (
+          <div className="mt-6">
+            <GameChat
+              gameId={gameId}
+              currentUserId={currentUserId}
+              currentPseudo={currentPseudo}
+            />
+          </div>
+        )}
 
       </div>
     </main>

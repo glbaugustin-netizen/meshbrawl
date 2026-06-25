@@ -6,6 +6,7 @@ import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/Button";
+import GameChat from "@/components/GameChat";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,8 @@ function JeuPageInner() {
   const [quitModal1,  setQuitModal1]  = useState(false);
   const [quitModal2,  setQuitModal2]  = useState(false);
   const [quitting,    setQuitting]    = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentPseudo, setCurrentPseudo] = useState('');
   const fileInputRef    = useRef<HTMLInputElement>(null);
   const redirectedRef   = useRef(false);
   const timerWasPositive = useRef(false);
@@ -91,8 +94,22 @@ function JeuPageInner() {
       setPlayers((data as unknown as GamePlayer[]) || []);
     }
 
+    async function loadCurrentUser() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setCurrentUserId(session.user.id);
+        const { data: userData } = await supabase
+          .from('users')
+          .select('pseudo')
+          .eq('id', session.user.id)
+          .single();
+        if (userData) setCurrentPseudo(userData.pseudo);
+      }
+    }
+
     loadGame();
     loadPlayers();
+    loadCurrentUser();
 
     const channel = supabase
       .channel(`jeu:${gameId}`)
@@ -443,6 +460,16 @@ function JeuPageInner() {
                 </li>
               )}
             </ul>
+
+            {gameId && currentUserId && currentPseudo && (
+              <div className="mt-4">
+                <GameChat
+                  gameId={gameId}
+                  currentUserId={currentUserId || ''}
+                  currentPseudo={currentPseudo}
+                />
+              </div>
+            )}
           </aside>
         </div>
       </div>
