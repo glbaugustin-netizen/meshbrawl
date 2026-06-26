@@ -76,6 +76,12 @@ function AttentePageInner() {
   const intervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownStarted  = useRef(false);
 
+  // Chef de groupe = premier joueur (ordre par id). S'il quitte, le suivant
+  // devient automatiquement players[0] → nouveau chef, sans état stocké.
+  const leaderUserId = players[0]?.user_id ?? null;
+  const leaderPseudo = players[0]?.users?.pseudo ?? '';
+  const isLeader     = !!currentUserId && leaderUserId === currentUserId;
+
   // Récupère l'utilisateur connecté
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -101,7 +107,8 @@ function AttentePageInner() {
       const { data } = await supabase
         .from('game_players')
         .select('id, user_id, status, users(pseudo, avatar_color, country, elo)')
-        .eq('game_id', gameId);
+        .eq('game_id', gameId)
+        .order('id', { ascending: true }); // ordre stable → le 1er = chef de groupe
       setPlayers((data as unknown as GamePlayer[]) || []);
     }
 
@@ -182,11 +189,14 @@ function AttentePageInner() {
     }, 1000);
   }
 
-  // Countdown + auto-lancement
+  // Countdown + auto-lancement.
+  // Lobby plein (10/10) → démarre tout seul depuis n'importe quel client (anti-blocage).
+  // Lobby partiel (3-9) → SEUL le chef gère le compte à rebours et le lancement,
+  // ce qui lui permet de retarder (bouton ATTENDRE) ou de lancer immédiatement.
   useEffect(() => {
-    if (players.length >= 10) { startGame(); return; }
+    if (players.length >= TOTAL_SLOTS) { startGame(); return; }
 
-    if (players.length >= MIN_PLAYERS) {
+    if (players.length >= MIN_PLAYERS && isLeader) {
       if (!countdownStarted.current) {
         countdownStarted.current = true;
         setCountdown(COUNTDOWN_START);
@@ -212,7 +222,20 @@ function AttentePageInner() {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [players.length]);
+  }, [players.length, isLeader]);
+
+  // Chef : retarde le lancement auto en remettant le compte à rebours au max.
+  const handleDelay = () => {
+    if (!isLeader) return;
+    setCountdown(COUNTDOWN_START);
+  };
+
+  // Chef : lance la partie immédiatement (si assez de joueurs).
+  const handleLaunchNow = () => {
+    if (!isLeader || players.length < MIN_PLAYERS) return;
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    startGame();
+  };
 
   // Quitter la partie
   const handleQuit = async () => {
@@ -296,6 +319,7 @@ function AttentePageInner() {
                 key={player.id}
                 player={player}
                 isMe={player.user_id === currentUserId}
+                isLeader={player.user_id === leaderUserId}
               />
             ) : (
               <EmptySlot key={i} />
@@ -313,29 +337,58 @@ function AttentePageInner() {
               >
                 BRAWL EN COURS !
               </p>
+            ) : isLeader ? (
+              <>
+                <p
+                  className="font-bangers uppercase tracking-widest text-[#ff2e2e] leading-none tabular-nums"
+                  style={{ fontSize: "36px" }}
+                >
+                  LANCEMENT DANS{" "}
+                  <span style={{ textShadow: "3px 3px 0 #1a1a1a" }}>{countdown}s</span>
+                </p>
+
+                <div
+                  className="w-full max-w-sm h-4 border-[3px] border-[#1a1a1a] overflow-hidden"
+                  style={{ borderRadius: "8px", backgroundColor: "#1a1a1a" }}
+                  role="progressbar"
+                  aria-valuenow={countdown}
+                  aria-valuemin={0}
+                  aria-valuemax={COUNTDOWN_START}
+                >
+                  <div
+                    className="h-full transition-all duration-[900ms] ease-linear"
+                    style={{ width: `${progressPct * 100}%`, backgroundColor: barColor, borderRadius: "5px" }}
+                  />
+                </div>
+
+                {/* Contrôles du chef de groupe */}
+                <p className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 flex items-center gap-1">
+                  <IconCrown small /> Tu es le chef de groupe
+                </p>
+                <div className="flex gap-3 flex-wrap justify-center">
+                  <button
+                    type="button"
+                    onClick={handleLaunchNow}
+                    className="font-bangers uppercase tracking-widest text-[#ffd400] bg-[#ff2e2e] border-[4px] border-[#1a1a1a] px-7 py-2.5 transition-all duration-100 hover:-translate-y-[2px]"
+                    style={{ borderRadius: "12px", boxShadow: "0 5px 0 #1a1a1a", fontSize: "20px" }}
+                  >
+                    LANCER MAINTENANT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelay}
+                    className="font-bangers uppercase tracking-widest text-[#1a1a1a] bg-white border-[4px] border-[#1a1a1a] px-7 py-2.5 transition-all duration-100 hover:-translate-y-[2px]"
+                    style={{ borderRadius: "12px", boxShadow: "0 5px 0 #1a1a1a", fontSize: "20px" }}
+                  >
+                    ATTENDRE
+                  </button>
+                </div>
+              </>
             ) : (
-              <p
-                className="font-bangers uppercase tracking-widest text-[#ff2e2e] leading-none tabular-nums"
-                style={{ fontSize: "36px" }}
-              >
-                LANCEMENT DANS{" "}
-                <span style={{ textShadow: "3px 3px 0 #1a1a1a" }}>{countdown}s</span>
+              <p className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]/60 flex items-center gap-2 text-center">
+                <IconCrown small /> En attente du chef {leaderPseudo && `(${leaderPseudo})`}...
               </p>
             )}
-
-            <div
-              className="w-full max-w-sm h-4 border-[3px] border-[#1a1a1a] overflow-hidden"
-              style={{ borderRadius: "8px", backgroundColor: "#1a1a1a" }}
-              role="progressbar"
-              aria-valuenow={countdown}
-              aria-valuemin={0}
-              aria-valuemax={COUNTDOWN_START}
-            >
-              <div
-                className="h-full transition-all duration-[900ms] ease-linear"
-                style={{ width: `${progressPct * 100}%`, backgroundColor: barColor, borderRadius: "5px" }}
-              />
-            </div>
           </div>
         )}
 
@@ -370,7 +423,7 @@ function AttentePageInner() {
 
 const FALLBACK_COLORS = ["#ff2e2e", "#2e6bff", "#0aa36b", "#c026d3", "#ff9500"];
 
-function PlayerSlot({ player, isMe }: { player: GamePlayer; isMe: boolean }) {
+function PlayerSlot({ player, isMe, isLeader }: { player: GamePlayer; isMe: boolean; isLeader: boolean }) {
   const u        = player.users;
   const pseudo   = u?.pseudo   || '???';
   const initials = pseudo.slice(0, 2).toUpperCase();
@@ -380,9 +433,20 @@ function PlayerSlot({ player, isMe }: { player: GamePlayer; isMe: boolean }) {
 
   return (
     <div
-      className="bg-white border-[5px] border-[#1a1a1a] rounded-[16px] p-4 flex flex-col items-center gap-2"
+      className="relative bg-white border-[5px] border-[#1a1a1a] rounded-[16px] p-4 flex flex-col items-center gap-2"
       style={{ boxShadow: isMe ? "4px 4px 0 #ff2e2e" : "4px 4px 0 #1a1a1a", borderColor: isMe ? "#ff2e2e" : "#1a1a1a" }}
     >
+      {/* Couronne du chef de groupe */}
+      {isLeader && (
+        <div
+          className="absolute -top-4 left-1/2 -translate-x-1/2 z-10"
+          style={{ transform: "translateX(-50%) rotate(-8deg)" }}
+          title="Chef de groupe"
+        >
+          <IconCrown />
+        </div>
+      )}
+
       {/* Avatar */}
       <div
         className="w-16 h-16 rounded-full border-[4px] border-[#1a1a1a] flex items-center justify-center font-archivo-black text-white text-lg shrink-0"
@@ -433,6 +497,19 @@ function EmptySlot() {
         En attente...
       </p>
     </div>
+  );
+}
+
+// ─── Crown ────────────────────────────────────────────────────────────────────
+
+function IconCrown({ small }: { small?: boolean }) {
+  const size = small ? 14 : 26;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="#ffd400"
+      stroke="#1a1a1a" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true"
+      style={{ filter: small ? undefined : "drop-shadow(1.5px 1.5px 0 #1a1a1a)" }}>
+      <path d="M2 8l4.5 4L12 5l5.5 7L22 8l-2 11H4L2 8z" />
+    </svg>
   );
 }
 
