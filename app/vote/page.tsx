@@ -64,16 +64,14 @@ function VotePageInner() {
   const [currentPseudo,   setCurrentPseudo]   = useState('');
   const [votingStartedAt, setVotingStartedAt] = useState<number | null>(null);
   const [currentIndex,    setCurrentIndex]    = useState(0);
-  const [totalVoters,     setTotalVoters]     = useState(0);
   const [etoileUtilisee,  setEtoileUtilisee]  = useState(false);
   const [flashColor,      setFlashColor]      = useState<string | null>(null);
   const [timer,           setTimer]           = useState(VOTE_DURATION);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState('');
 
-  const hasVotedMap    = useRef<Record<number, boolean>>({});
-  const redirectedRef  = useRef(false);
-  const advancedSlots  = useRef<Set<number>>(new Set());
+  const hasVotedMap   = useRef<Record<number, boolean>>({});
+  const redirectedRef = useRef(false);
 
   // Load model-viewer CDN script once
   useEffect(() => {
@@ -137,9 +135,6 @@ function VotePageInner() {
         }));
 
         setRendus(list);
-        // Nombre total de joueurs ayant soumis. Un rendu est validé quand
-        // tous les AUTRES joueurs ont voté dessus, soit (total - 1) votes.
-        setTotalVoters(list.length);
 
         // Pré-remplit la map des votes déjà émis (utile après un refresh,
         // pour ne pas redonner un vote sur un rendu déjà voté). On marque
@@ -251,42 +246,33 @@ function VotePageInner() {
     return () => clearInterval(interval);
   }, [votingStartedAt, rendus.length]);
 
-  // Avance si tous ont voté sur le rendu courant
+  // Synchro realtime : si voting_started_at change en DB (depuis un autre client),
+  // on met à jour localement. Si la partie passe à 'finished', on redirige.
   useEffect(() => {
-    if (!gameId || !votingStartedAt || rendus.length === 0) return;
+    if (!gameId) return;
 
-    const checkAllVoted = async () => {
-      const rendu = rendus[currentIndex];
-      if (!rendu) return;
+    const channel = supabase
+      .channel(`vote-game:${gameId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` },
+        (payload) => {
+          const updated = payload.new as { voting_started_at?: string; status?: string };
+          if (updated.voting_started_at) {
+            const ts = new Date(updated.voting_started_at).getTime();
+            setVotingStartedAt((prev) => (prev !== ts ? ts : prev));
+          }
+          if (updated.status === 'finished' && !redirectedRef.current) {
+            redirectedRef.current = true;
+            router.push(`/resultats?gameId=${gameId}`);
+          }
+        }
+      )
+      .subscribe();
 
-      const { count } = await supabase
-        .from('votes')
-        .select('*', { count: 'exact', head: true })
-        .eq('game_id', gameId)
-        .eq('target_player_id', rendu.id);
-
-      // On avance seulement quand TOUS les autres joueurs ont voté ce rendu,
-      // c.-à-d. (total des soumissions - 1) votes (l'auteur ne vote pas).
-      // Guards : ce slot n'a pas déjà été avancé par ce client,
-      //          et le slot dure au minimum 8 s (laisse le temps aux joueurs lents de charger).
-      if (count !== null && totalVoters > 1 && count >= totalVoters - 1) {
-        if (advancedSlots.current.has(currentIndex)) return;
-        const slotStart = votingStartedAt + currentIndex * VOTE_DURATION * 1000;
-        if (Date.now() - slotStart < 8000) return;
-        advancedSlots.current.add(currentIndex);
-        const newStartedAt = Date.now() - ((currentIndex + 1) * VOTE_DURATION * 1000);
-        await supabase
-          .from('games')
-          .update({ voting_started_at: new Date(newStartedAt).toISOString() })
-          .eq('id', gameId);
-        setVotingStartedAt(newStartedAt);
-      }
-    };
-
-    const interval = setInterval(checkAllVoted, 3000);
-    return () => clearInterval(interval);
+    return () => { supabase.removeChannel(channel); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameId, currentIndex, votingStartedAt, rendus, totalVoters, supabase]);
+  }, [gameId]);
 
   // Vote handler
   const handleVote = async (type: "bien" | "mal" | "etoile") => {
