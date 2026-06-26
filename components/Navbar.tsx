@@ -67,7 +67,7 @@ export default function Navbar() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (pathname.startsWith('/jeu')) return null;
+  if (pathname.startsWith('/jeu') || pathname.startsWith('/vote')) return null;
 
   return (
     <header className="sticky top-0 z-50 w-full" style={{ backgroundColor: "#1a1a1a", borderBottom: "3px solid #1a1a1a" }}>
