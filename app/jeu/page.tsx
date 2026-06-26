@@ -29,6 +29,16 @@ function formatTime(s: number): string {
   return [h, m, sec].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
+// Parse une timestamp en ms epoch. Le serveur écrit toujours ends_at en UTC
+// (.toISOString()). Si la chaîne lue depuis la DB n'a PAS d'info de fuseau
+// (colonne `timestamp` sans tz), new Date() la lirait en heure LOCALE → décalage
+// de plusieurs heures selon le PC. On force donc l'interprétation UTC.
+function parseUtcMs(ts: string | null): number {
+  if (!ts) return 0;
+  const hasTz = /([zZ]|[+-]\d{2}:?\d{2})$/.test(ts);
+  return new Date(hasTz ? ts : ts + 'Z').getTime();
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function JeuPage() {
@@ -81,7 +91,7 @@ function JeuPageInner() {
       if (!data) return;
       setGame(data);
       setEndsAt(data.ends_at);
-      const secs = Math.max(0, Math.floor((new Date(data.ends_at).getTime() - Date.now()) / 1000));
+      const secs = Math.max(0, Math.floor((parseUtcMs(data.ends_at) - Date.now()) / 1000));
       setTimeLeft(secs);
       setGameLoaded(true);
     }
@@ -136,7 +146,7 @@ function JeuPageInner() {
     if (!endsAt) return;
 
     const interval = setInterval(() => {
-      const secs = Math.max(0, Math.floor((new Date(endsAt).getTime() - Date.now()) / 1000));
+      const secs = Math.max(0, Math.floor((parseUtcMs(endsAt) - Date.now()) / 1000));
       if (secs > 0) timerWasPositive.current = true;
       setTimeLeft(secs);
       if (secs === 0) clearInterval(interval);
