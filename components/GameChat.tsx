@@ -46,7 +46,9 @@ export default function GameChat({ gameId, currentUserId, currentPseudo }: Props
         table:  'messages',
         filter: `game_id=eq.${gameId}`,
       }, (payload) => {
-        setMessages((prev) => [...prev, payload.new as Message]);
+        const msg = payload.new as Message;
+        // Déduplication : si déjà présent (ajout optimiste), on ignore
+        setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
         setUnread((prev) => prev + 1);
       })
       .subscribe();
@@ -70,12 +72,26 @@ export default function GameChat({ gameId, currentUserId, currentPseudo }: Props
     if (!text || sending) return;
     setSending(true);
     setInput('');
-    await supabase.from('messages').insert({
-      game_id: gameId,
-      user_id: currentUserId,
-      pseudo:  currentPseudo,
-      content: text,
-    });
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        game_id: gameId,
+        user_id: currentUserId,
+        pseudo:  currentPseudo,
+        content: text,
+      })
+      .select('id, user_id, pseudo, content, created_at')
+      .single();
+
+    if (error) {
+      console.error('Erreur envoi message:', error.message);
+      setInput(text); // on restaure le texte pour réessayer
+    } else if (data) {
+      // Ajout optimiste immédiat (le realtime dédupliquera via l'id)
+      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data as Message]));
+    }
+
     setSending(false);
   };
 
@@ -192,9 +208,9 @@ export default function GameChat({ gameId, currentUserId, currentPseudo }: Props
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        style={{ display: open ? 'none' : undefined }}
         className="fixed bottom-6 left-6 z-50 flex items-center gap-2 font-bangers uppercase tracking-widest text-[#ffd400] bg-[#1a1a1a] border-[4px] border-[#1a1a1a] px-5 py-3 transition-all duration-100 hover:-translate-y-[3px]"
         style={{
+          display:      open ? 'none' : undefined,
           borderRadius: "14px",
           boxShadow:    "0 6px 0 #ff2e2e",
           fontSize:     "18px",
