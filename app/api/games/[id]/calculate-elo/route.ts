@@ -24,7 +24,9 @@ export async function POST(
     .single()
 
   if (!game) return NextResponse.json({ error: 'Game not found' }, { status: 404 })
-  if (game.status === 'finished') return NextResponse.json({ ok: true, skipped: true })
+  if (game.status === 'finished')   return NextResponse.json({ ok: true, skipped: true })
+  // Un autre process est déjà en train de calculer → on laisse le poller attendre.
+  if (game.status === 'calculating') return NextResponse.json({ ok: false, calculating: true })
 
   // 2. Récupère tous les game_players de cette partie
   const { data: players } = await supabase
@@ -47,9 +49,32 @@ export async function POST(
     }
   }
 
+  // VERROU ATOMIQUE : passe le statut in_progress → calculating. Comme plusieurs
+  // joueurs appellent cette route en parallèle, sans ce verrou ils liraient tous
+  // 'in_progress' avant qu'aucun n'écrive 'finished' et appliqueraient l'ELO
+  // PLUSIEURS FOIS (ex. +8 ELO devient +24 avec 3 joueurs). Un seul process
+  // gagne la transition ; les autres sont court-circuités.
+  const { data: claimed, error: claimErr } = await supabase
+    .from('games')
+    .update({ status: 'calculating' })
+    .eq('id', gameId)
+    .eq('status', 'in_progress')
+    .select('id')
+    .maybeSingle()
+
+  if (claimErr) {
+    // Cas improbable (contrainte CHECK sur status) : on ne bloque pas la partie,
+    // on retombe sur l'ancien comportement plutôt que de la laisser coincée.
+    console.error('Verrou status échoué:', claimErr.message)
+  } else if (!claimed) {
+    // Un autre process a déjà pris la main → rien à faire.
+    return NextResponse.json({ ok: true, skipped: true })
+  }
+
   const totalPlayers = players.length
   const maxPoints    = (totalPlayers - 1) * 10
 
+  try {
   // 3. Récupère tous les votes de cette partie
   const { data: votes } = await supabase
     .from('votes')
@@ -122,7 +147,7 @@ export async function POST(
     }
   }
 
-  // 7. Marque la partie comme terminée
+  // 7. Marque la partie comme terminée (déverrouille + signale aux pollers)
   await supabase
     .from('games')
     .update({ status: 'finished' })
@@ -150,4 +175,16 @@ export async function POST(
   }
 
   return NextResponse.json({ ok: true })
+
+  } catch (e) {
+    // Échec en cours de calcul : on libère le verrou pour permettre une
+    // nouvelle tentative (sinon la partie resterait bloquée en 'calculating').
+    await supabase
+      .from('games')
+      .update({ status: 'in_progress' })
+      .eq('id', gameId)
+      .eq('status', 'calculating')
+    console.error('calculate-elo a échoué:', e)
+    return NextResponse.json({ error: 'Calcul échoué' }, { status: 500 })
+  }
 }
