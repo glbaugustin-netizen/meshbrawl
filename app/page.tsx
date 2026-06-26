@@ -65,10 +65,10 @@ export default async function Home() {
         <FloatingOnomatopoeia />
 
         {/* Hero content */}
-        <div className="relative z-10 max-w-3xl mx-auto text-center flex flex-col items-center gap-8">
+        <div className="relative z-10 w-full max-w-4xl mx-auto text-center flex flex-col items-center gap-6 sm:gap-8 lg:gap-10">
           {/* Decorative arena badge */}
           <span
-            className="font-archivo-black text-xs sm:text-sm uppercase tracking-widest bg-white border-[3px] border-[#1a1a1a] px-5 py-2 inline-block"
+            className="font-archivo-black text-xs sm:text-sm uppercase tracking-widest bg-white border-[3px] border-[#1a1a1a] px-4 sm:px-6 py-2 inline-block"
             style={{
               boxShadow: "3px 3px 0 #1a1a1a",
               transform: "rotate(-2deg)",
@@ -79,14 +79,14 @@ export default async function Home() {
           </span>
 
           {/* Slogan */}
-          <h1 className="font-bangers leading-none tracking-widest">
+          <h1 className="font-bangers leading-none tracking-widest w-full">
             <span
               className="block"
               style={{
-                fontSize: "clamp(52px, 11vw, 80px)",
+                fontSize: "clamp(64px, 14vw, 130px)",
                 color: "#ff2e2e",
-                WebkitTextStroke: "2px #1a1a1a",
-                textShadow: "4px 4px 0 #1a1a1a",
+                WebkitTextStroke: "clamp(2px, 0.3vw, 4px) #1a1a1a",
+                textShadow: "clamp(3px, 0.5vw, 6px) clamp(3px, 0.5vw, 6px) 0 #1a1a1a",
               }}
             >
               MODELISE.
@@ -94,10 +94,10 @@ export default async function Home() {
             <span
               className="block"
               style={{
-                fontSize: "clamp(52px, 11vw, 80px)",
+                fontSize: "clamp(64px, 14vw, 130px)",
                 color: "#1a1a1a",
-                WebkitTextStroke: "2px #ffd400",
-                textShadow: "4px 4px 0 #ff2e2e",
+                WebkitTextStroke: "clamp(2px, 0.3vw, 4px) #ffd400",
+                textShadow: "clamp(3px, 0.5vw, 6px) clamp(3px, 0.5vw, 6px) 0 #ff2e2e",
               }}
             >
               BRAWL.
@@ -105,10 +105,10 @@ export default async function Home() {
             <span
               className="block"
               style={{
-                fontSize: "clamp(52px, 11vw, 80px)",
+                fontSize: "clamp(64px, 14vw, 130px)",
                 color: "#2e6bff",
-                WebkitTextStroke: "2px #1a1a1a",
-                textShadow: "4px 4px 0 #1a1a1a",
+                WebkitTextStroke: "clamp(2px, 0.3vw, 4px) #1a1a1a",
+                textShadow: "clamp(3px, 0.5vw, 6px) clamp(3px, 0.5vw, 6px) 0 #1a1a1a",
               }}
             >
               VOTE.
@@ -119,7 +119,8 @@ export default async function Home() {
           <Link href="/match">
             <Button
               variant="primary"
-              className="!inline-flex items-center gap-4 !text-5xl !px-14 !py-4 !rounded-[20px] !shadow-[0_12px_0_#1a1a1a] hover:!-translate-y-[4px] hover:!shadow-[0_16px_0_#1a1a1a] active:!shadow-[0_2px_0_#1a1a1a]"
+              className="!inline-flex items-center gap-3 sm:gap-4 !rounded-[16px] sm:!rounded-[20px] !shadow-[0_8px_0_#1a1a1a] sm:!shadow-[0_12px_0_#1a1a1a] hover:!-translate-y-[4px] hover:!shadow-[0_12px_0_#1a1a1a] sm:hover:!shadow-[0_16px_0_#1a1a1a] active:!shadow-[0_2px_0_#1a1a1a]"
+              style={{ fontSize: "clamp(28px, 5vw, 52px)", padding: "clamp(10px, 1.5vw, 18px) clamp(28px, 5vw, 56px)" }}
             >
               JOUER
               <IconArrowRight />
