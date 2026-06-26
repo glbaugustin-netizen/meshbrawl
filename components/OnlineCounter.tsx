@@ -17,11 +17,9 @@ export default function OnlineCounter({ initial }: { initial: number }) {
   };
 
   useEffect(() => {
-    fetch("/api/users/ping", { method: "POST" }).catch(() => {});
     fetchCount();
 
     const interval = setInterval(() => {
-      fetch("/api/users/ping", { method: "POST" }).catch(() => {});
       fetchCount();
     }, 15_000);
 

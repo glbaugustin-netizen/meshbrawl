@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import Pinger from "@/components/Pinger";
 
 export const metadata: Metadata = {
   title: "MeshBrawl",
@@ -24,6 +25,7 @@ export default function RootLayout({
       </head>
       <body>
         <Navbar />
+        <Pinger />
         {children}
       </body>
     </html>
