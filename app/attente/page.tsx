@@ -8,19 +8,9 @@ import { createClient } from "@/lib/supabase/client";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TOTAL_SLOTS         = 10;
-const MIN_PLAYERS         = 3;
-const COUNTDOWN_START     = 30;
-const PRESENCE_TIMEOUT_MS = 45 * 1000; // joueur déconnecté si dernier ping > 45s
-
-// Parse une timestamp en ms epoch en forçant l'UTC si aucun fuseau n'est présent
-// (last_seen est écrit côté serveur via .toISOString()). Évite le décalage de
-// fuseau quand la colonne est un `timestamp` sans tz lue par un PC en heure locale.
-function parseUtcMs(ts: string | null): number {
-  if (!ts) return 0;
-  const hasTz = /([zZ]|[+-]\d{2}:?\d{2})$/.test(ts);
-  return new Date(hasTz ? ts : ts + 'Z').getTime();
-}
+const TOTAL_SLOTS      = 10;
+const MIN_PLAYERS      = 3;
+const COUNTDOWN_START  = 30;
 
 const DURATION_LABELS: Record<number, string> = {
   600:    '10 MIN',
@@ -48,7 +38,6 @@ interface GamePlayer {
     avatar_color: string | null;
     country:      string | null;
     elo:          number | null;
-    last_seen:    string | null;
   } | null;
 }
 
@@ -88,21 +77,6 @@ function AttentePageInner() {
   const countdownStarted  = useRef(false);
   const redirectingRef    = useRef(false); // évite les redirections multiples vers /jeu
 
-  // Joueurs présents = ceux dont le dernier ping est récent. Filtre les fantômes
-  // (onglet fermé brutalement sans cliquer QUITTER) le temps que la purge serveur
-  // les retire réellement de la base.
-  const presenceCutoff = Date.now() - PRESENCE_TIMEOUT_MS;
-  const activePlayers  = players.filter(
-    (p) => parseUtcMs(p.users?.last_seen ?? null) >= presenceCutoff
-  );
-
-  // Chef de groupe = premier joueur ACTIF (ordre par id). Si le chef se déconnecte
-  // (ping périmé), il sort de activePlayers → le suivant devient chef aussitôt,
-  // sans attendre la suppression de sa ligne. S'il clique QUITTER, idem.
-  const leaderUserId = activePlayers[0]?.user_id ?? null;
-  const leaderPseudo = activePlayers[0]?.users?.pseudo ?? '';
-  const isLeader     = !!currentUserId && leaderUserId === currentUserId;
-
   // Récupère l'utilisateur connecté
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -123,9 +97,8 @@ function AttentePageInner() {
         .single();
       if (data) {
         setGame(data);
-        // Fallback poll : si la partie a démarré (ou est terminée) et que l'event
-        // realtime n'est pas arrivé (réplication 'games' non activée), on bascule
-        // quand même vers le jeu. Sinon les non-chefs restaient bloqués en attente.
+        // Fallback : si la partie a démarré et que l'event realtime n'est pas
+        // arrivé (réplication 'games' non activée), on bascule quand même.
         if (data.status === 'in_progress' && !redirectingRef.current) {
           redirectingRef.current = true;
           setLaunched(true);
@@ -137,9 +110,8 @@ function AttentePageInner() {
     async function loadPlayers() {
       const { data } = await supabase
         .from('game_players')
-        .select('id, user_id, status, users(pseudo, avatar_color, country, elo, last_seen)')
-        .eq('game_id', gameId)
-        .order('id', { ascending: true }); // ordre stable → le 1er actif = chef
+        .select('id, user_id, status, users(pseudo, avatar_color, country, elo)')
+        .eq('game_id', gameId);
       setPlayers((data as unknown as GamePlayer[]) || []);
     }
 
@@ -223,14 +195,11 @@ function AttentePageInner() {
     }, 1000);
   }
 
-  // Countdown + auto-lancement.
-  // Lobby plein (10/10) → démarre tout seul depuis n'importe quel client (anti-blocage).
-  // Lobby partiel (3-9) → SEUL le chef gère le compte à rebours et le lancement,
-  // ce qui lui permet de retarder (bouton ATTENDRE) ou de lancer immédiatement.
+  // Countdown + auto-lancement
   useEffect(() => {
-    if (activePlayers.length >= TOTAL_SLOTS) { startGame(); return; }
+    if (players.length >= 10) { startGame(); return; }
 
-    if (activePlayers.length >= MIN_PLAYERS && isLeader) {
+    if (players.length >= MIN_PLAYERS) {
       if (!countdownStarted.current) {
         countdownStarted.current = true;
         setCountdown(COUNTDOWN_START);
@@ -256,32 +225,7 @@ function AttentePageInner() {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePlayers.length, isLeader]);
-
-  // Le chef purge périodiquement les joueurs déconnectés (service role côté
-  // serveur). Si le chef lui-même se déconnecte, il sort de activePlayers et le
-  // nouveau chef prend le relais de la purge → le fantôme finit par être retiré.
-  useEffect(() => {
-    if (!isLeader || !gameId) return;
-    const prune = () => { fetch(`/api/games/${gameId}/presence`, { method: 'POST' }).catch(() => {}); };
-    prune();
-    const interval = setInterval(prune, 10_000);
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLeader, gameId]);
-
-  // Chef : retarde le lancement auto en remettant le compte à rebours au max.
-  const handleDelay = () => {
-    if (!isLeader) return;
-    setCountdown(COUNTDOWN_START);
-  };
-
-  // Chef : lance la partie immédiatement (si assez de joueurs).
-  const handleLaunchNow = () => {
-    if (!isLeader || activePlayers.length < MIN_PLAYERS) return;
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    startGame();
-  };
+  }, [players.length]);
 
   // Quitter la partie
   const handleQuit = async () => {
@@ -311,7 +255,7 @@ function AttentePageInner() {
     router.push('/match');
   };
 
-  const hasMinPlayers = activePlayers.length >= MIN_PLAYERS;
+  const hasMinPlayers = players.length >= MIN_PLAYERS;
   const progressPct   = countdown / COUNTDOWN_START;
   const barColor      = progressPct > 0.6 ? "#0aa36b" : progressPct > 0.3 ? "#ffd400" : "#ff2e2e";
 
@@ -352,20 +296,19 @@ function AttentePageInner() {
           )}
 
           <p className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]/60">
-            {activePlayers.length} / {TOTAL_SLOTS} BRAWLERS
+            {players.length} / {TOTAL_SLOTS} BRAWLERS
           </p>
         </div>
 
         {/* ── Player grid ── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {Array.from({ length: TOTAL_SLOTS }).map((_, i) => {
-            const player = activePlayers[i];
+            const player = players[i];
             return player ? (
               <PlayerSlot
                 key={player.id}
                 player={player}
                 isMe={player.user_id === currentUserId}
-                isLeader={player.user_id === leaderUserId}
               />
             ) : (
               <EmptySlot key={i} />
@@ -383,58 +326,29 @@ function AttentePageInner() {
               >
                 BRAWL EN COURS !
               </p>
-            ) : isLeader ? (
-              <>
-                <p
-                  className="font-bangers uppercase tracking-widest text-[#ff2e2e] leading-none tabular-nums"
-                  style={{ fontSize: "36px" }}
-                >
-                  LANCEMENT DANS{" "}
-                  <span style={{ textShadow: "3px 3px 0 #1a1a1a" }}>{countdown}s</span>
-                </p>
-
-                <div
-                  className="w-full max-w-sm h-4 border-[3px] border-[#1a1a1a] overflow-hidden"
-                  style={{ borderRadius: "8px", backgroundColor: "#1a1a1a" }}
-                  role="progressbar"
-                  aria-valuenow={countdown}
-                  aria-valuemin={0}
-                  aria-valuemax={COUNTDOWN_START}
-                >
-                  <div
-                    className="h-full transition-all duration-[900ms] ease-linear"
-                    style={{ width: `${progressPct * 100}%`, backgroundColor: barColor, borderRadius: "5px" }}
-                  />
-                </div>
-
-                {/* Contrôles du chef de groupe */}
-                <p className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 flex items-center gap-1">
-                  <IconCrown small /> Tu es le chef de groupe
-                </p>
-                <div className="flex gap-3 flex-wrap justify-center">
-                  <button
-                    type="button"
-                    onClick={handleLaunchNow}
-                    className="font-bangers uppercase tracking-widest text-[#ffd400] bg-[#ff2e2e] border-[4px] border-[#1a1a1a] px-7 py-2.5 transition-all duration-100 hover:-translate-y-[2px]"
-                    style={{ borderRadius: "12px", boxShadow: "0 5px 0 #1a1a1a", fontSize: "20px" }}
-                  >
-                    LANCER MAINTENANT
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDelay}
-                    className="font-bangers uppercase tracking-widest text-[#1a1a1a] bg-white border-[4px] border-[#1a1a1a] px-7 py-2.5 transition-all duration-100 hover:-translate-y-[2px]"
-                    style={{ borderRadius: "12px", boxShadow: "0 5px 0 #1a1a1a", fontSize: "20px" }}
-                  >
-                    ATTENDRE
-                  </button>
-                </div>
-              </>
             ) : (
-              <p className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]/60 flex items-center gap-2 text-center">
-                <IconCrown small /> En attente du chef {leaderPseudo && `(${leaderPseudo})`}...
+              <p
+                className="font-bangers uppercase tracking-widest text-[#ff2e2e] leading-none tabular-nums"
+                style={{ fontSize: "36px" }}
+              >
+                LANCEMENT DANS{" "}
+                <span style={{ textShadow: "3px 3px 0 #1a1a1a" }}>{countdown}s</span>
               </p>
             )}
+
+            <div
+              className="w-full max-w-sm h-4 border-[3px] border-[#1a1a1a] overflow-hidden"
+              style={{ borderRadius: "8px", backgroundColor: "#1a1a1a" }}
+              role="progressbar"
+              aria-valuenow={countdown}
+              aria-valuemin={0}
+              aria-valuemax={COUNTDOWN_START}
+            >
+              <div
+                className="h-full transition-all duration-[900ms] ease-linear"
+                style={{ width: `${progressPct * 100}%`, backgroundColor: barColor, borderRadius: "5px" }}
+              />
+            </div>
           </div>
         )}
 
@@ -469,7 +383,7 @@ function AttentePageInner() {
 
 const FALLBACK_COLORS = ["#ff2e2e", "#2e6bff", "#0aa36b", "#c026d3", "#ff9500"];
 
-function PlayerSlot({ player, isMe, isLeader }: { player: GamePlayer; isMe: boolean; isLeader: boolean }) {
+function PlayerSlot({ player, isMe }: { player: GamePlayer; isMe: boolean }) {
   const u        = player.users;
   const pseudo   = u?.pseudo   || '???';
   const initials = pseudo.slice(0, 2).toUpperCase();
@@ -479,20 +393,9 @@ function PlayerSlot({ player, isMe, isLeader }: { player: GamePlayer; isMe: bool
 
   return (
     <div
-      className="relative bg-white border-[5px] border-[#1a1a1a] rounded-[16px] p-4 flex flex-col items-center gap-2"
+      className="bg-white border-[5px] border-[#1a1a1a] rounded-[16px] p-4 flex flex-col items-center gap-2"
       style={{ boxShadow: isMe ? "4px 4px 0 #ff2e2e" : "4px 4px 0 #1a1a1a", borderColor: isMe ? "#ff2e2e" : "#1a1a1a" }}
     >
-      {/* Couronne du chef de groupe */}
-      {isLeader && (
-        <div
-          className="absolute -top-4 left-1/2 -translate-x-1/2 z-10"
-          style={{ transform: "translateX(-50%) rotate(-8deg)" }}
-          title="Chef de groupe"
-        >
-          <IconCrown />
-        </div>
-      )}
-
       {/* Avatar */}
       <div
         className="w-16 h-16 rounded-full border-[4px] border-[#1a1a1a] flex items-center justify-center font-archivo-black text-white text-lg shrink-0"
@@ -543,19 +446,6 @@ function EmptySlot() {
         En attente...
       </p>
     </div>
-  );
-}
-
-// ─── Crown ────────────────────────────────────────────────────────────────────
-
-function IconCrown({ small }: { small?: boolean }) {
-  const size = small ? 14 : 26;
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="#ffd400"
-      stroke="#1a1a1a" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true"
-      style={{ filter: small ? undefined : "drop-shadow(1.5px 1.5px 0 #1a1a1a)" }}>
-      <path d="M2 8l4.5 4L12 5l5.5 7L22 8l-2 11H4L2 8z" />
-    </svg>
   );
 }
 
