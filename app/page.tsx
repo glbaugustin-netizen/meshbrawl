@@ -4,6 +4,7 @@ import Card from "@/components/Card";
 import { createClient } from "@/lib/supabase/server";
 import OnlineCounter from "@/components/OnlineCounter";
 import FloatingOnomatopoeia from "@/components/FloatingOnomatopoeia";
+import ShareButton from "@/components/ShareButton";
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 
@@ -175,6 +176,7 @@ export default async function Home() {
                 {social.icon}
               </a>
             ))}
+            <ShareButton />
           </div>
         </div>
       </section>
