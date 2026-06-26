@@ -431,17 +431,11 @@ function VotePageInner() {
         ) : (
           <div className="grid grid-cols-3 gap-4">
             <VoteButton onClick={() => handleVote("bien")} bg="#0aa36b" color="#fff" shadow="#065c3d">
-              <span className="flex flex-col items-center gap-1">
-                <IconThumbUp />
-                <span style={{ fontSize: "16px", lineHeight: 1 }}>BIEN</span>
-              </span>
+              <IconThumbUp />
             </VoteButton>
 
             <VoteButton onClick={() => handleVote("mal")} bg="#ff2e2e" color="#fff" shadow="#8b0000">
-              <span className="flex flex-col items-center gap-1">
-                <IconThumbDown />
-                <span style={{ fontSize: "16px", lineHeight: 1 }}>MAL</span>
-              </span>
+              <IconThumbDown />
             </VoteButton>
 
             <VoteButton
