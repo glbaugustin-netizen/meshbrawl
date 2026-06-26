@@ -60,12 +60,12 @@ export default async function Home() {
   return (
     <main>
       {/* ── HERO ── */}
-      <section className="relative overflow-hidden min-h-[calc(100vh-64px)] flex flex-col justify-center pt-16 pb-12 px-4">
+      <section className="relative overflow-x-hidden min-h-[calc(100vh-64px)] flex flex-col justify-center py-12 px-4" style={{ paddingTop: "clamp(24px, 8vh, 80px)", paddingBottom: "clamp(24px, 8vh, 80px)" }}>
         {/* Onomatopées aléatoires qui pop et disparaissent */}
         <FloatingOnomatopoeia />
 
         {/* Hero content */}
-        <div className="relative z-10 w-full max-w-4xl mx-auto text-center flex flex-col items-center gap-6 sm:gap-8 lg:gap-10">
+        <div className="relative z-10 w-full max-w-4xl mx-auto text-center flex flex-col items-center" style={{ gap: "clamp(12px, 3vh, 40px)" }}>
           {/* Decorative arena badge */}
           <span
             className="font-archivo-black text-xs sm:text-sm uppercase tracking-widest bg-white border-[3px] border-[#1a1a1a] px-4 sm:px-6 py-2 inline-block"
@@ -83,7 +83,7 @@ export default async function Home() {
             <span
               className="block"
               style={{
-                fontSize: "clamp(64px, 14vw, 130px)",
+                fontSize: "clamp(40px, min(14vw, 16vh), 130px)",
                 color: "#ff2e2e",
                 WebkitTextStroke: "clamp(2px, 0.3vw, 4px) #1a1a1a",
                 textShadow: "clamp(3px, 0.5vw, 6px) clamp(3px, 0.5vw, 6px) 0 #1a1a1a",
@@ -94,7 +94,7 @@ export default async function Home() {
             <span
               className="block"
               style={{
-                fontSize: "clamp(64px, 14vw, 130px)",
+                fontSize: "clamp(40px, min(14vw, 16vh), 130px)",
                 color: "#1a1a1a",
                 WebkitTextStroke: "clamp(2px, 0.3vw, 4px) #ffd400",
                 textShadow: "clamp(3px, 0.5vw, 6px) clamp(3px, 0.5vw, 6px) 0 #ff2e2e",
@@ -105,7 +105,7 @@ export default async function Home() {
             <span
               className="block"
               style={{
-                fontSize: "clamp(64px, 14vw, 130px)",
+                fontSize: "clamp(40px, min(14vw, 16vh), 130px)",
                 color: "#2e6bff",
                 WebkitTextStroke: "clamp(2px, 0.3vw, 4px) #1a1a1a",
                 textShadow: "clamp(3px, 0.5vw, 6px) clamp(3px, 0.5vw, 6px) 0 #1a1a1a",
