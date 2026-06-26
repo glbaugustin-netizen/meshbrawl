@@ -86,6 +86,7 @@ function AttentePageInner() {
   const startingRef       = useRef(false);
   const intervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownStarted  = useRef(false);
+  const redirectingRef    = useRef(false); // évite les redirections multiples vers /jeu
 
   // Joueurs présents = ceux dont le dernier ping est récent. Filtre les fantômes
   // (onglet fermé brutalement sans cliquer QUITTER) le temps que la purge serveur
@@ -120,7 +121,17 @@ function AttentePageInner() {
         .select('mode, duration_seconds, status')
         .eq('id', gameId)
         .single();
-      if (data) setGame(data);
+      if (data) {
+        setGame(data);
+        // Fallback poll : si la partie a démarré (ou est terminée) et que l'event
+        // realtime n'est pas arrivé (réplication 'games' non activée), on bascule
+        // quand même vers le jeu. Sinon les non-chefs restaient bloqués en attente.
+        if (data.status === 'in_progress' && !redirectingRef.current) {
+          redirectingRef.current = true;
+          setLaunched(true);
+          setTimeout(() => router.push(`/jeu?gameId=${gameId}`), 1500);
+        }
+      }
     }
 
     async function loadPlayers() {
@@ -155,7 +166,8 @@ function AttentePageInner() {
         table:  'games',
         filter: `id=eq.${gameId}`,
       }, (payload) => {
-        if (payload.new.status === 'in_progress') {
+        if (payload.new.status === 'in_progress' && !redirectingRef.current) {
+          redirectingRef.current = true;
           setLaunched(true);
           setTimeout(() => router.push(`/jeu?gameId=${gameId}`), 1500);
         }
@@ -164,6 +176,7 @@ function AttentePageInner() {
 
     const pollInterval = setInterval(() => {
       loadPlayers();
+      loadGame(); // recheck du statut → fallback si le realtime 'games' ne fire pas
     }, 3000);
 
     return () => {
@@ -196,8 +209,9 @@ function AttentePageInner() {
         .eq('id', gameId)
         .single();
 
-      if (data?.status === 'in_progress') {
+      if (data?.status === 'in_progress' && !redirectingRef.current) {
         clearInterval(poll);
+        redirectingRef.current = true;
         setLaunched(true);
         setTimeout(() => router.push(`/jeu?gameId=${gameId}`), 1500);
       }
