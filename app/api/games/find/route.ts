@@ -24,6 +24,40 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non connecté' }, { status: 401 })
 
+  // Retire l'utilisateur de toutes ses anciennes parties "waiting" (évite les lobbies fantômes)
+  const { data: myGames } = await supabase
+    .from('game_players')
+    .select('game_id')
+    .eq('user_id', user.id)
+
+  if (myGames?.length) {
+    const myGameIds = myGames.map((g) => g.game_id)
+    const { data: waitingGames } = await supabase
+      .from('games')
+      .select('id')
+      .eq('status', 'waiting')
+      .in('id', myGameIds)
+
+    if (waitingGames?.length) {
+      const waitingIds = waitingGames.map((g) => g.id)
+      await supabase
+        .from('game_players')
+        .delete()
+        .eq('user_id', user.id)
+        .in('game_id', waitingIds)
+      // Supprime les parties waiting devenues vides
+      for (const gId of waitingIds) {
+        const { count } = await supabase
+          .from('game_players')
+          .select('*', { count: 'exact', head: true })
+          .eq('game_id', gId)
+        if (count === 0) {
+          await supabase.from('games').delete().eq('id', gId)
+        }
+      }
+    }
+  }
+
   // Cherche une partie en attente avec le même mode et durée
   const { data: existingGame } = await supabase
     .from('games')
