@@ -71,8 +71,9 @@ function VotePageInner() {
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState('');
 
-  const hasVotedMap   = useRef<Record<number, boolean>>({});
-  const redirectedRef = useRef(false);
+  const hasVotedMap    = useRef<Record<number, boolean>>({});
+  const redirectedRef  = useRef(false);
+  const advancedSlots  = useRef<Set<number>>(new Set());
 
   // Load model-viewer CDN script once
   useEffect(() => {
@@ -266,7 +267,13 @@ function VotePageInner() {
 
       // On avance seulement quand TOUS les autres joueurs ont voté ce rendu,
       // c.-à-d. (total des soumissions - 1) votes (l'auteur ne vote pas).
+      // Guards : ce slot n'a pas déjà été avancé par ce client,
+      //          et le slot dure au minimum 8 s (laisse le temps aux joueurs lents de charger).
       if (count !== null && totalVoters > 1 && count >= totalVoters - 1) {
+        if (advancedSlots.current.has(currentIndex)) return;
+        const slotStart = votingStartedAt + currentIndex * VOTE_DURATION * 1000;
+        if (Date.now() - slotStart < 8000) return;
+        advancedSlots.current.add(currentIndex);
         const newStartedAt = Date.now() - ((currentIndex + 1) * VOTE_DURATION * 1000);
         await supabase
           .from('games')
