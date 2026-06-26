@@ -188,10 +188,11 @@ export default function GameChat({ gameId, currentUserId, currentPseudo }: Props
         </div>
       </div>
 
-      {/* Bouton flottant bas-gauche */}
+      {/* Bouton flottant bas-gauche — caché quand le panneau est ouvert */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        style={{ display: open ? 'none' : undefined }}
         className="fixed bottom-6 left-6 z-50 flex items-center gap-2 font-bangers uppercase tracking-widest text-[#ffd400] bg-[#1a1a1a] border-[4px] border-[#1a1a1a] px-5 py-3 transition-all duration-100 hover:-translate-y-[3px]"
         style={{
           borderRadius: "14px",
