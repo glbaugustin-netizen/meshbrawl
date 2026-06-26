@@ -464,13 +464,11 @@ function VotePageInner() {
         </p>
 
         {gameId && currentUserId && currentPseudo && (
-          <div className="mt-6">
-            <GameChat
-              gameId={gameId}
-              currentUserId={currentUserId}
-              currentPseudo={currentPseudo}
-            />
-          </div>
+          <GameChat
+            gameId={gameId}
+            currentUserId={currentUserId}
+            currentPseudo={currentPseudo}
+          />
         )}
 
       </div>

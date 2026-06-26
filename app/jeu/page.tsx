@@ -462,13 +462,11 @@ function JeuPageInner() {
             </ul>
 
             {gameId && currentUserId && currentPseudo && (
-              <div className="mt-4">
-                <GameChat
-                  gameId={gameId}
-                  currentUserId={currentUserId || ''}
-                  currentPseudo={currentPseudo}
-                />
-              </div>
+              <GameChat
+                gameId={gameId}
+                currentUserId={currentUserId || ''}
+                currentPseudo={currentPseudo}
+              />
             )}
           </aside>
         </div>
