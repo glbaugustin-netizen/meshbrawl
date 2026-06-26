@@ -1,9 +1,9 @@
 import Link from "next/link";
 import Button from "@/components/Button";
 import Card from "@/components/Card";
-import Badge from "@/components/Badge";
 import { createClient } from "@/lib/supabase/server";
 import OnlineCounter from "@/components/OnlineCounter";
+import FloatingOnomatopoeia from "@/components/FloatingOnomatopoeia";
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 
@@ -60,16 +60,8 @@ export default async function Home() {
     <main>
       {/* ── HERO ── */}
       <section className="relative overflow-hidden min-h-[calc(100vh-64px)] flex flex-col justify-center pt-16 pb-12 px-4">
-        {/* Floating decorative badges */}
-        <div className="hidden lg:block absolute left-[6%] top-1/2 -translate-y-1/2">
-          <Badge label="POW!" rotate={-12} delay={0} />
-        </div>
-        <div className="hidden lg:block absolute right-[6%] top-[40%]">
-          <Badge label="BAM!" rotate={10} delay={0.46} />
-        </div>
-        <div className="hidden xl:block absolute right-[8%] bottom-[15%]">
-          <Badge label="KO!" rotate={-6} delay={0.93} />
-        </div>
+        {/* Onomatopées aléatoires qui pop et disparaissent */}
+        <FloatingOnomatopoeia />
 
         {/* Hero content */}
         <div className="relative z-10 max-w-3xl mx-auto text-center flex flex-col items-center gap-8">

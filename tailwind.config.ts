@@ -17,10 +17,18 @@ const config: Config = {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0" },
         },
+        "onomatopoeia-pop": {
+          "0%":   { opacity: "0", transform: "scale(0.2)" },
+          "12%":  { opacity: "1", transform: "scale(1.18)" },
+          "26%":  { transform: "scale(1)" },
+          "72%":  { opacity: "1", transform: "scale(1)" },
+          "100%": { opacity: "0", transform: "scale(1.12)" },
+        },
       },
       animation: {
         "badge-pop": "badge-pop 1.4s ease-in-out infinite",
         "blink-dot": "blink-dot 1s ease-in-out infinite",
+        "onomatopoeia-pop": "onomatopoeia-pop 1.8s ease-out forwards",
       },
       colors: {
         yellow: "#ffd400",
