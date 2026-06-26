@@ -25,6 +25,9 @@ export default function GameChat({ gameId, currentUserId, currentPseudo }: Props
   const [input,    setInput]    = useState('');
   const [sending,  setSending]  = useState(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
+  // Ref pour lire l'état "ouvert" dans la callback realtime (sinon valeur périmée)
+  const openRef    = useRef(open);
+  openRef.current  = open;
 
   useEffect(() => {
     const load = async () => {
@@ -49,7 +52,10 @@ export default function GameChat({ gameId, currentUserId, currentPseudo }: Props
         const msg = payload.new as Message;
         // Déduplication : si déjà présent (ajout optimiste), on ignore
         setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
-        setUnread((prev) => prev + 1);
+        // Pastille uniquement pour les messages des AUTRES et si le chat est fermé
+        if (msg.user_id !== currentUserId && !openRef.current) {
+          setUnread((prev) => prev + 1);
+        }
       })
       .subscribe();
 
