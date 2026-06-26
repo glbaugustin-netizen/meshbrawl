@@ -8,9 +8,19 @@ import { createClient } from "@/lib/supabase/client";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TOTAL_SLOTS      = 10;
-const MIN_PLAYERS      = 3;
-const COUNTDOWN_START  = 30;
+const TOTAL_SLOTS         = 10;
+const MIN_PLAYERS         = 3;
+const COUNTDOWN_START     = 30;
+const PRESENCE_TIMEOUT_MS = 45 * 1000; // joueur déconnecté si dernier ping > 45s
+
+// Parse une timestamp en ms epoch en forçant l'UTC si aucun fuseau n'est présent
+// (last_seen est écrit côté serveur via .toISOString()). Évite le décalage de
+// fuseau quand la colonne est un `timestamp` sans tz lue par un PC en heure locale.
+function parseUtcMs(ts: string | null): number {
+  if (!ts) return 0;
+  const hasTz = /([zZ]|[+-]\d{2}:?\d{2})$/.test(ts);
+  return new Date(hasTz ? ts : ts + 'Z').getTime();
+}
 
 const DURATION_LABELS: Record<number, string> = {
   600:    '10 MIN',
@@ -38,6 +48,7 @@ interface GamePlayer {
     avatar_color: string | null;
     country:      string | null;
     elo:          number | null;
+    last_seen:    string | null;
   } | null;
 }
 
@@ -76,10 +87,19 @@ function AttentePageInner() {
   const intervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownStarted  = useRef(false);
 
-  // Chef de groupe = premier joueur (ordre par id). S'il quitte, le suivant
-  // devient automatiquement players[0] → nouveau chef, sans état stocké.
-  const leaderUserId = players[0]?.user_id ?? null;
-  const leaderPseudo = players[0]?.users?.pseudo ?? '';
+  // Joueurs présents = ceux dont le dernier ping est récent. Filtre les fantômes
+  // (onglet fermé brutalement sans cliquer QUITTER) le temps que la purge serveur
+  // les retire réellement de la base.
+  const presenceCutoff = Date.now() - PRESENCE_TIMEOUT_MS;
+  const activePlayers  = players.filter(
+    (p) => parseUtcMs(p.users?.last_seen ?? null) >= presenceCutoff
+  );
+
+  // Chef de groupe = premier joueur ACTIF (ordre par id). Si le chef se déconnecte
+  // (ping périmé), il sort de activePlayers → le suivant devient chef aussitôt,
+  // sans attendre la suppression de sa ligne. S'il clique QUITTER, idem.
+  const leaderUserId = activePlayers[0]?.user_id ?? null;
+  const leaderPseudo = activePlayers[0]?.users?.pseudo ?? '';
   const isLeader     = !!currentUserId && leaderUserId === currentUserId;
 
   // Récupère l'utilisateur connecté
@@ -106,9 +126,9 @@ function AttentePageInner() {
     async function loadPlayers() {
       const { data } = await supabase
         .from('game_players')
-        .select('id, user_id, status, users(pseudo, avatar_color, country, elo)')
+        .select('id, user_id, status, users(pseudo, avatar_color, country, elo, last_seen)')
         .eq('game_id', gameId)
-        .order('id', { ascending: true }); // ordre stable → le 1er = chef de groupe
+        .order('id', { ascending: true }); // ordre stable → le 1er actif = chef
       setPlayers((data as unknown as GamePlayer[]) || []);
     }
 
@@ -194,9 +214,9 @@ function AttentePageInner() {
   // Lobby partiel (3-9) → SEUL le chef gère le compte à rebours et le lancement,
   // ce qui lui permet de retarder (bouton ATTENDRE) ou de lancer immédiatement.
   useEffect(() => {
-    if (players.length >= TOTAL_SLOTS) { startGame(); return; }
+    if (activePlayers.length >= TOTAL_SLOTS) { startGame(); return; }
 
-    if (players.length >= MIN_PLAYERS && isLeader) {
+    if (activePlayers.length >= MIN_PLAYERS && isLeader) {
       if (!countdownStarted.current) {
         countdownStarted.current = true;
         setCountdown(COUNTDOWN_START);
@@ -222,7 +242,19 @@ function AttentePageInner() {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [players.length, isLeader]);
+  }, [activePlayers.length, isLeader]);
+
+  // Le chef purge périodiquement les joueurs déconnectés (service role côté
+  // serveur). Si le chef lui-même se déconnecte, il sort de activePlayers et le
+  // nouveau chef prend le relais de la purge → le fantôme finit par être retiré.
+  useEffect(() => {
+    if (!isLeader || !gameId) return;
+    const prune = () => { fetch(`/api/games/${gameId}/presence`, { method: 'POST' }).catch(() => {}); };
+    prune();
+    const interval = setInterval(prune, 10_000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLeader, gameId]);
 
   // Chef : retarde le lancement auto en remettant le compte à rebours au max.
   const handleDelay = () => {
@@ -232,7 +264,7 @@ function AttentePageInner() {
 
   // Chef : lance la partie immédiatement (si assez de joueurs).
   const handleLaunchNow = () => {
-    if (!isLeader || players.length < MIN_PLAYERS) return;
+    if (!isLeader || activePlayers.length < MIN_PLAYERS) return;
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     startGame();
   };
@@ -265,7 +297,7 @@ function AttentePageInner() {
     router.push('/match');
   };
 
-  const hasMinPlayers = players.length >= MIN_PLAYERS;
+  const hasMinPlayers = activePlayers.length >= MIN_PLAYERS;
   const progressPct   = countdown / COUNTDOWN_START;
   const barColor      = progressPct > 0.6 ? "#0aa36b" : progressPct > 0.3 ? "#ffd400" : "#ff2e2e";
 
@@ -306,14 +338,14 @@ function AttentePageInner() {
           )}
 
           <p className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]/60">
-            {players.length} / {TOTAL_SLOTS} BRAWLERS
+            {activePlayers.length} / {TOTAL_SLOTS} BRAWLERS
           </p>
         </div>
 
         {/* ── Player grid ── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {Array.from({ length: TOTAL_SLOTS }).map((_, i) => {
-            const player = players[i];
+            const player = activePlayers[i];
             return player ? (
               <PlayerSlot
                 key={player.id}
