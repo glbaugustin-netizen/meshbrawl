@@ -72,6 +72,10 @@ function VotePageInner() {
 
   const hasVotedMap   = useRef<Record<number, boolean>>({});
   const redirectedRef = useRef(false);
+  // Décalage entre l'horloge serveur et l'horloge locale (serverNow - Date.now()).
+  // Permet de comparer voting_started_at (timestamp serveur) à une "heure locale
+  // corrigée", éliminant les écarts d'horloge entre les différents PC.
+  const clockOffsetRef = useRef(0);
 
   // Load model-viewer CDN script once
   useEffect(() => {
@@ -99,27 +103,22 @@ function VotePageInner() {
           .single();
         if (pseudoData) setCurrentPseudo(pseudoData.pseudo);
 
-        // Si la partie est déjà terminée, on va directement aux résultats.
-        // (On ne se base PLUS sur "a déjà voté" : un joueur émet plusieurs
-        // votes au fil de la partie et ne doit pas être éjecté après le 1er.)
-        const { data: statusData } = await supabase
-          .from('games')
-          .select('status')
-          .eq('id', gameId)
-          .single();
-
-        if (statusData?.status === 'finished') {
-          router.push(`/resultats?gameId=${gameId}`);
-          return;
-        }
-
         // Charge toutes les soumissions via une route serveur (service role).
-        // On attend que TOUS les joueurs aient soumis (max 60 tentatives × 2s)
-        // pour éviter que le timer démarre avant que tout le monde soit prêt.
+        // Cette route est AUTORITAIRE : elle attend que tous aient soumis, démarre
+        // la phase de vote (voting_started_at) côté serveur, et renvoie tout en
+        // millisecondes epoch — donc aucune ambiguïté de fuseau horaire possible.
+        // On boucle (max 60 × 2s) jusqu'à ce que voting_started_at soit défini.
         type RawPlayer = { id: string; user_id: string; submission_url: string | null; submission_type: string | null };
+        type SubsResp  = {
+          submissions: RawPlayer[];
+          totalPlayers: number;
+          votingStartedAt: number | null;
+          serverNow: number;
+          status: string;
+        };
 
         let list: Rendu[] = [];
-        let totalPlayers = 0;
+        let startedAt: number | null = null;
 
         for (let attempt = 0; attempt < 60; attempt++) {
           const submissionsRes = await fetch(`/api/games/${gameId}/submissions`);
@@ -128,26 +127,37 @@ function VotePageInner() {
             setLoading(false);
             return;
           }
-          const { submissions: players, totalPlayers: total } = await submissionsRes.json();
-          totalPlayers = total as number;
-          list = (players as RawPlayer[]).map((p) => ({
+          const data = (await submissionsRes.json()) as SubsResp;
+
+          // Corrige le décalage d'horloge local ↔ serveur à chaque réponse
+          clockOffsetRef.current = data.serverNow - Date.now();
+
+          // Partie déjà terminée → résultats
+          if (data.status === 'finished') {
+            router.push(`/resultats?gameId=${gameId}`);
+            return;
+          }
+
+          list = (data.submissions ?? []).map((p) => ({
             id:      p.id,
             auteur:  'ANONYME',
             fichier: p.submission_url ?? '',
             type:    (p.submission_type === 'video' ? 'video' : 'glb') as 'glb' | 'video',
             isMine:  p.user_id === user.id,
           }));
-          // Toutes les soumissions sont là → on peut démarrer
-          if (list.length >= totalPlayers && totalPlayers > 0) break;
+
+          // La phase de vote a démarré côté serveur → on tient le timestamp
+          if (data.votingStartedAt !== null) {
+            startedAt = data.votingStartedAt;
+            break;
+          }
           // Sinon on attend 2s et on réessaie
           await new Promise((r) => setTimeout(r, 2000));
         }
 
         setRendus(list);
 
-        // Pré-remplit la map des votes déjà émis (utile après un refresh,
-        // pour ne pas redonner un vote sur un rendu déjà voté). On marque
-        // aussi son propre rendu comme "déjà traité".
+        // Pré-remplit la map des votes déjà émis (après un refresh) + son propre rendu.
         const { data: existingVotes } = await supabase
           .from('votes')
           .select('target_player_id')
@@ -162,39 +172,7 @@ function VotePageInner() {
           if (idx >= 0) hasVotedMap.current[idx] = true;
         });
 
-        // Récupère ou crée voting_started_at (anti race condition)
-        const { data: gameData } = await supabase
-          .from('games')
-          .select('voting_started_at')
-          .eq('id', gameId)
-          .single();
-
-        let startedAt: number;
-
-        if (gameData?.voting_started_at) {
-          startedAt = new Date(gameData.voting_started_at).getTime();
-        } else {
-          // Attendre un délai aléatoire et re-vérifier avant de setter
-          await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
-          const { data: gameData2 } = await supabase
-            .from('games')
-            .select('voting_started_at')
-            .eq('id', gameId)
-            .single();
-
-          if (gameData2?.voting_started_at) {
-            startedAt = new Date(gameData2.voting_started_at).getTime();
-          } else {
-            const now = new Date().toISOString();
-            await supabase
-              .from('games')
-              .update({ voting_started_at: now })
-              .eq('id', gameId);
-            startedAt = new Date(now).getTime();
-          }
-        }
-
-        setVotingStartedAt(startedAt);
+        if (startedAt !== null) setVotingStartedAt(startedAt);
       } catch (e) {
         console.error(e);
         setError('Erreur de chargement');
@@ -212,16 +190,19 @@ function VotePageInner() {
     if (!votingStartedAt || rendus.length === 0) return;
 
     const calcIndex = () => {
-      const elapsed = Date.now() - votingStartedAt;
+      // Heure locale corrigée du décalage avec le serveur
+      const elapsed = (Date.now() + clockOffsetRef.current) - votingStartedAt;
 
       if (elapsed < 0) return;
 
       const idx = Math.floor(elapsed / (VOTE_DURATION * 1000));
 
       if (idx >= rendus.length) {
-        if (elapsed > VOTE_DURATION * 1000 * rendus.length && !redirectedRef.current) {
+        // Fenêtre de vote terminée pour tout le monde (timer partagé) → résultats.
+        // C'est la page /resultats qui déclenche calculate-elo (protégé côté
+        // serveur pour ne jamais finir avant la fin réelle de la fenêtre).
+        if (!redirectedRef.current) {
           redirectedRef.current = true;
-          fetch(`/api/games/${gameId}/calculate-elo`, { method: 'POST' }).catch(() => {});
           router.push(`/resultats?gameId=${gameId}`);
         }
       } else {
@@ -243,7 +224,7 @@ function VotePageInner() {
     if (!votingStartedAt || rendus.length === 0) return;
 
     const updateTimer = () => {
-      const elapsed = Date.now() - votingStartedAt;
+      const elapsed = (Date.now() + clockOffsetRef.current) - votingStartedAt;
       if (elapsed < 0) { setTimer(VOTE_DURATION); return; }
       const timeInSlot = elapsed % (VOTE_DURATION * 1000);
       const remaining = Math.max(0, VOTE_DURATION - Math.floor(timeInSlot / 1000));
@@ -254,31 +235,6 @@ function VotePageInner() {
     const interval = setInterval(updateTimer, 500);
     return () => clearInterval(interval);
   }, [votingStartedAt, rendus.length]);
-
-  // Synchro realtime : si voting_started_at change en DB (depuis un autre client),
-  // on met à jour localement. On ne redirige PAS sur 'finished' ici : chaque
-  // joueur attend son propre timer pour ne pas être éjecté prématurément.
-  useEffect(() => {
-    if (!gameId) return;
-
-    const channel = supabase
-      .channel(`vote-game:${gameId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` },
-        (payload) => {
-          const updated = payload.new as { voting_started_at?: string };
-          if (updated.voting_started_at) {
-            const ts = new Date(updated.voting_started_at).getTime();
-            setVotingStartedAt((prev) => (prev !== ts ? ts : prev));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameId]);
 
   // Vote handler
   const handleVote = async (type: "bien" | "mal" | "etoile") => {

@@ -48,12 +48,13 @@ function ResultatsPageInner() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
 
-        // Déclenche le calcul ELO (idempotent — no-op si déjà fait)
-        fetch(`/api/games/${gameId}/calculate-elo`, { method: 'POST' }).catch(() => {});
-
-        // Attend que le calcul ELO soit terminé (max 15s)
+        // Déclenche le calcul ELO et attend qu'il soit terminé. La route est
+        // idempotente ET protégée par une garde temporelle (elle renvoie
+        // tooEarly tant que la fenêtre de vote n'est pas écoulée). On la rappelle
+        // donc à chaque itération jusqu'à ce que la partie soit 'finished'.
         let attempts = 0;
-        while (attempts < 10) {
+        while (attempts < 20) {
+          await fetch(`/api/games/${gameId}/calculate-elo`, { method: 'POST' }).catch(() => {});
           const { data: game } = await supabase
             .from('games')
             .select('status')

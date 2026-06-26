@@ -1,34 +1,25 @@
-import { createServerClient } from '@supabase/ssr'
 import { createClient } from "@supabase/supabase-js"
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+
+const VOTE_DURATION_MS = 60 * 1000
 
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: gameId } = await params
-  const cookieStore = await cookies()
 
-  const supabase = createServerClient(
+  // Service role pour TOUTES les opérations : sinon, sous RLS, la liste des
+  // joueurs/votes serait partielle (vue de l'appelant) et fausserait l'ELO.
+  const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (c) => {
-          try {
-            c.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-          } catch {}
-        },
-      },
-    }
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
   // 1. Vérifie que la partie existe et n'est pas déjà calculée
   const { data: game } = await supabase
     .from('games')
-    .select('status')
+    .select('status, voting_started_at')
     .eq('id', gameId)
     .single()
 
@@ -38,11 +29,23 @@ export async function POST(
   // 2. Récupère tous les game_players de cette partie
   const { data: players } = await supabase
     .from('game_players')
-    .select('id, user_id')
+    .select('id, user_id, status')
     .eq('game_id', gameId)
 
   if (!players || players.length === 0)
     return NextResponse.json({ error: 'No players' }, { status: 400 })
+
+  // GARDE TEMPORELLE : on refuse de terminer la partie tant que la fenêtre de
+  // vote partagée n'est pas écoulée. Empêche n'importe quel joueur (timer en
+  // avance, horloge décalée…) de clôturer prématurément le vote des autres.
+  const submittedCount = players.filter((p) => p.status === 'submitted').length
+  if (game.voting_started_at && submittedCount > 0) {
+    const startMs   = new Date(game.voting_started_at).getTime()
+    const windowEnd = startMs + submittedCount * VOTE_DURATION_MS
+    if (Date.now() < windowEnd) {
+      return NextResponse.json({ ok: false, tooEarly: true })
+    }
+  }
 
   const totalPlayers = players.length
   const maxPoints    = (totalPlayers - 1) * 10
@@ -125,26 +128,20 @@ export async function POST(
     .update({ status: 'finished' })
     .eq('id', gameId)
 
-  // 8. Supprime les fichiers de soumission du bucket
-  // Suppression via listing du dossier
-  const adminClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-  const { data: folders } = await adminClient.storage
+  // 8. Supprime les fichiers de soumission du bucket (réutilise le client admin)
+  const { data: folders } = await supabase.storage
     .from("submissions")
     .list(gameId);
 
   if (folders && folders.length > 0) {
     for (const folder of folders) {
-      const { data: files } = await adminClient.storage
+      const { data: files } = await supabase.storage
         .from("submissions")
         .list(`${gameId}/${folder.name}`);
 
       if (files && files.length > 0) {
         const paths = files.map((f) => `${gameId}/${folder.name}/${f.name}`);
-        const { error } = await adminClient.storage
+        const { error } = await supabase.storage
           .from("submissions")
           .remove(paths);
         if (error) console.error("Erreur suppression:", error);
