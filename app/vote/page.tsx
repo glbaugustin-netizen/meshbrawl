@@ -36,6 +36,7 @@ interface Rendu {
   auteur: string;
   fichier: string;
   type:   'glb' | 'video';
+  isMine: boolean;
 }
 
 const VOTE_DURATION = 60;
@@ -99,25 +100,30 @@ function VotePageInner() {
           .single();
         if (pseudoData) setCurrentPseudo(pseudoData.pseudo);
 
-        // Vérifie si l'utilisateur a déjà voté
-        const { data: existingVotes } = await supabase
-          .from('votes')
-          .select('vote_type')
-          .eq('game_id', gameId)
-          .eq('voter_id', user.id);
+        // Si la partie est déjà terminée, on va directement aux résultats.
+        // (On ne se base PLUS sur "a déjà voté" : un joueur émet plusieurs
+        // votes au fil de la partie et ne doit pas être éjecté après le 1er.)
+        const { data: statusData } = await supabase
+          .from('games')
+          .select('status')
+          .eq('id', gameId)
+          .single();
 
-        if (existingVotes && existingVotes.length > 0) {
+        if (statusData?.status === 'finished') {
           router.push(`/resultats?gameId=${gameId}`);
           return;
         }
 
-        // Charge les soumissions (pas la sienne)
+        // Charge TOUTES les soumissions de la partie, dans un ordre
+        // déterministe partagé par tous les joueurs (tri par id). C'est ce
+        // qui garantit que `currentIndex` désigne le même rendu pour tout
+        // le monde — condition indispensable à la synchro du vote.
         const { data: players, error: err } = await supabase
           .from('game_players')
           .select('id, user_id, submission_url, submission_type')
           .eq('game_id', gameId)
           .eq('status', 'submitted')
-          .neq('user_id', user.id);
+          .order('id', { ascending: true });
 
         if (err) { setError(err.message); setLoading(false); return; }
 
@@ -126,11 +132,30 @@ function VotePageInner() {
           auteur:  'ANONYME',
           fichier: p.submission_url ?? '',
           type:    (p.submission_type === 'video' ? 'video' : 'glb') as 'glb' | 'video',
+          isMine:  p.user_id === user.id,
         }));
 
         setRendus(list);
-        // Nombre de voters = nombre de soumissions (chaque joueur vote pour les autres)
-        setTotalVoters((players ?? []).length);
+        // Nombre total de joueurs ayant soumis. Un rendu est validé quand
+        // tous les AUTRES joueurs ont voté dessus, soit (total - 1) votes.
+        setTotalVoters(list.length);
+
+        // Pré-remplit la map des votes déjà émis (utile après un refresh,
+        // pour ne pas redonner un vote sur un rendu déjà voté). On marque
+        // aussi son propre rendu comme "déjà traité".
+        const { data: existingVotes } = await supabase
+          .from('votes')
+          .select('target_player_id')
+          .eq('game_id', gameId)
+          .eq('voter_id', user.id);
+
+        list.forEach((r, idx) => {
+          if (r.isMine) hasVotedMap.current[idx] = true;
+        });
+        (existingVotes ?? []).forEach((v) => {
+          const idx = list.findIndex((r) => r.id === v.target_player_id);
+          if (idx >= 0) hasVotedMap.current[idx] = true;
+        });
 
         // Récupère ou crée voting_started_at (anti race condition)
         const { data: gameData } = await supabase
@@ -214,6 +239,7 @@ function VotePageInner() {
 
     const updateTimer = () => {
       const elapsed = Date.now() - votingStartedAt;
+      if (elapsed < 0) { setTimer(VOTE_DURATION); return; }
       const timeInSlot = elapsed % (VOTE_DURATION * 1000);
       const remaining = Math.max(0, VOTE_DURATION - Math.floor(timeInSlot / 1000));
       setTimer(remaining);
@@ -238,7 +264,9 @@ function VotePageInner() {
         .eq('game_id', gameId)
         .eq('target_player_id', rendu.id);
 
-      if (count !== null && totalVoters > 0 && count >= totalVoters - 1) {
+      // On avance seulement quand TOUS les autres joueurs ont voté ce rendu,
+      // c.-à-d. (total des soumissions - 1) votes (l'auteur ne vote pas).
+      if (count !== null && totalVoters > 1 && count >= totalVoters - 1) {
         const newStartedAt = Date.now() - ((currentIndex + 1) * VOTE_DURATION * 1000);
         await supabase
           .from('games')
@@ -255,10 +283,10 @@ function VotePageInner() {
 
   // Vote handler
   const handleVote = async (type: "bien" | "mal" | "etoile") => {
+    const rendu = rendus[currentIndex];
+    if (!rendu || rendu.isMine) return; // on ne vote jamais pour son propre rendu
     if (hasVotedMap.current[currentIndex] || !currentUserId || !gameId) return;
     hasVotedMap.current[currentIndex] = true;
-
-    const rendu = rendus[currentIndex];
 
     // Insère le vote en DB
     const { error: voteErr } = await supabase.from('votes').insert({
@@ -432,31 +460,45 @@ function VotePageInner() {
           </div>
         </div>
 
-        {/* ── Vote buttons ── */}
-        <div className="grid grid-cols-3 gap-4">
-          <VoteButton onClick={() => handleVote("bien")} bg="#0aa36b" color="#fff" shadow="#065c3d">
-            BIEN
-          </VoteButton>
-
-          <VoteButton onClick={() => handleVote("mal")} bg="#ff2e2e" color="#fff" shadow="#8b0000">
-            MAL
-          </VoteButton>
-
-          <VoteButton
-            onClick={() => handleVote("etoile")}
-            bg={etoileUtilisee ? "#cccccc" : "#ffd400"}
-            color={etoileUtilisee ? "#999" : "#1a1a1a"}
-            shadow={etoileUtilisee ? "#999" : "#7a6300"}
-            disabled={etoileUtilisee}
+        {/* ── Vote buttons (ou état d'attente si c'est ton rendu) ── */}
+        {rendu.isMine ? (
+          <div
+            className="flex flex-col items-center justify-center gap-2 border-[4px] border-[#1a1a1a] py-6 px-4 text-center"
+            style={{ borderRadius: "14px", backgroundColor: "#fff7cc", boxShadow: "4px 4px 0 #1a1a1a" }}
           >
-            <span className="flex flex-col items-center gap-1">
-              <IconStar disabled={etoileUtilisee} />
-              <span style={{ fontSize: "16px", lineHeight: 1 }}>
-                {etoileUtilisee ? "UTILISEE" : "MON PREFERE"}
+            <p className="font-bangers uppercase tracking-widest text-[#1a1a1a]" style={{ fontSize: "28px", lineHeight: 1 }}>
+              C&apos;EST TON RENDU !
+            </p>
+            <p className="font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a]/60">
+              En attente des votes des autres brawlers...
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-4">
+            <VoteButton onClick={() => handleVote("bien")} bg="#0aa36b" color="#fff" shadow="#065c3d">
+              BIEN
+            </VoteButton>
+
+            <VoteButton onClick={() => handleVote("mal")} bg="#ff2e2e" color="#fff" shadow="#8b0000">
+              MAL
+            </VoteButton>
+
+            <VoteButton
+              onClick={() => handleVote("etoile")}
+              bg={etoileUtilisee ? "#cccccc" : "#ffd400"}
+              color={etoileUtilisee ? "#999" : "#1a1a1a"}
+              shadow={etoileUtilisee ? "#999" : "#7a6300"}
+              disabled={etoileUtilisee}
+            >
+              <span className="flex flex-col items-center gap-1">
+                <IconStar disabled={etoileUtilisee} />
+                <span style={{ fontSize: "16px", lineHeight: 1 }}>
+                  {etoileUtilisee ? "UTILISEE" : "MON PREFERE"}
+                </span>
               </span>
-            </span>
-          </VoteButton>
-        </div>
+            </VoteButton>
+          </div>
+        )}
 
         {/* ── Hint ── */}
         <p
