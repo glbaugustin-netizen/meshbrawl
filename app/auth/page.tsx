@@ -110,6 +110,21 @@ export default function AuthPage() {
     setLoading(true);
     setAlert(null);
     const supabase = createClient();
+
+    // Pré-vérif : pseudo déjà pris (insensible à la casse).
+    // La vraie garde reste l'index unique en DB (gère les races).
+    const escaped = register.pseudo.trim().replace(/[%_\\]/g, '\\$&');
+    const { data: taken } = await supabase
+      .from('users')
+      .select('id', { head: false })
+      .ilike('pseudo', escaped)
+      .limit(1);
+    if (taken && taken.length > 0) {
+      setLoading(false);
+      setAlert({ text: 'Ce pseudo est déjà pris, choisis-en un autre.', ok: false });
+      return;
+    }
+
     const { error } = await supabase.auth.signUp({
       email: register.email.trim(),
       password: register.password,
@@ -117,7 +132,12 @@ export default function AuthPage() {
     });
     setLoading(false);
     if (error) {
-      setAlert({ text: error.message, ok: false });
+      // Le trigger qui crée la ligne users peut violer l'index unique sur le
+      // pseudo (cas de course) → message DB cryptique qu'on traduit.
+      const msg = /database error|saving new user|unique|duplicate/i.test(error.message)
+        ? 'Ce pseudo est déjà pris, choisis-en un autre.'
+        : error.message;
+      setAlert({ text: msg, ok: false });
     } else {
       setAlert({ text: 'Vérifie ton email pour confirmer ton compte.', ok: true });
     }
