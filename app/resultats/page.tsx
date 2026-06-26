@@ -249,14 +249,6 @@ function ResultatsPageInner() {
           >
             REJOUER
           </button>
-          <button
-            type="button"
-            onClick={() => window.location.href = '/profil'}
-            className="font-bangers uppercase tracking-widest text-[#1a1a1a] bg-white border-[5px] border-[#1a1a1a] px-10 py-3 transition-all duration-100 hover:-translate-y-[3px]"
-            style={{ fontSize: "28px", borderRadius: "14px", boxShadow: "0 8px 0 #1a1a1a" }}
-          >
-            VOIR MON PROFIL
-          </button>
         </div>
 
       </div>
