@@ -159,10 +159,16 @@ function ResultatsPageInner() {
     );
   }
 
-  // Podium order: 2nd left · 1st centre · 3rd right
-  const top3 = [2, 1, 3]
-    .map((r) => resultats.find((p) => p.rang === r))
-    .filter((p): p is Player => p !== undefined);
+  // Podium : on prend les 3 PREMIERS joueurs par position (resultats est déjà
+  // trié par rang). On raisonne par POSITION et pas par numéro de rang, sinon
+  // en cas d'ex-aequo (deux rang 1) un des joueurs disparaîtrait du podium.
+  // Ordre visuel : 2e à gauche · 1er au centre · 3e à droite.
+  const podium = resultats.slice(0, 3);
+  const top3 = [
+    podium[1] ? { pos: 2 as const, player: podium[1] } : null,
+    podium[0] ? { pos: 1 as const, player: podium[0] } : null,
+    podium[2] ? { pos: 3 as const, player: podium[2] } : null,
+  ].filter((x): x is { pos: 1 | 2 | 3; player: Player } => x !== null);
 
   return (
     <main className="min-h-[calc(100vh-64px)] px-4 py-12">
@@ -194,8 +200,8 @@ function ResultatsPageInner() {
           </div>
 
           <div className="relative z-10 flex items-end justify-center gap-2 sm:gap-4">
-            {top3.map((player) => (
-              <PodiumColumn key={player.rang} player={player} />
+            {top3.map(({ pos, player }) => (
+              <PodiumColumn key={player.pseudo + pos} player={player} position={pos} />
             ))}
           </div>
         </section>
@@ -285,13 +291,16 @@ const STEP = {
   3: { h: 64,  avatarPx: 56, fontSize: "15px", stepBg: "#ffffff" },
 } as const;
 
-function PodiumColumn({ player }: { player: Player }) {
-  const isFirst = player.rang === 1;
-  const cfg     = STEP[player.rang as 1 | 2 | 3];
+function PodiumColumn({ player, position }: { player: Player; position: 1 | 2 | 3 }) {
+  // La hauteur/style de la marche dépend de la POSITION visuelle (centre = 1).
+  // Le badge WINNER et le numéro affiché dépendent du RANG réel (gère ex-aequo).
+  const isCenter   = position === 1;
+  const isWinner   = player.rang === 1;
+  const cfg        = STEP[position];
 
   return (
     <div className="flex flex-col items-center flex-1 max-w-[180px]">
-      {isFirst && (
+      {isWinner && (
         <span
           className="font-bangers uppercase tracking-widest text-white bg-[#ff2e2e] border-[3px] border-[#1a1a1a] px-3 py-1 mb-2 animate-badge-pop"
           style={{ borderRadius: "8px", fontSize: "18px", boxShadow: "3px 3px 0 #1a1a1a", transform: "rotate(-3deg)" }}
@@ -315,7 +324,7 @@ function PodiumColumn({ player }: { player: Player }) {
 
       <p
         className="font-archivo-black text-[#1a1a1a] text-center mt-2 leading-tight px-1 truncate w-full"
-        style={{ fontSize: isFirst ? "14px" : "12px" }}
+        style={{ fontSize: isCenter ? "14px" : "12px" }}
       >
         {player.pseudo}
       </p>
@@ -344,7 +353,7 @@ function PodiumColumn({ player }: { player: Player }) {
       >
         <span
           className="font-bangers text-[#1a1a1a] leading-none"
-          style={{ fontSize: "56px", opacity: isFirst ? 1 : 0.15 }}
+          style={{ fontSize: "56px", opacity: isWinner ? 1 : 0.15 }}
         >
           {player.rang}
         </span>
