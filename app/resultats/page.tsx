@@ -48,6 +48,9 @@ function ResultatsPageInner() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
 
+        // Déclenche le calcul ELO (idempotent — no-op si déjà fait)
+        fetch(`/api/games/${gameId}/calculate-elo`, { method: 'POST' }).catch(() => {});
+
         // Attend que le calcul ELO soit terminé (max 15s)
         let attempts = 0;
         while (attempts < 10) {

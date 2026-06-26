@@ -113,20 +113,18 @@ function VotePageInner() {
           return;
         }
 
-        // Charge TOUTES les soumissions de la partie, dans un ordre
-        // déterministe partagé par tous les joueurs (tri par id). C'est ce
-        // qui garantit que `currentIndex` désigne le même rendu pour tout
-        // le monde — condition indispensable à la synchro du vote.
-        const { data: players, error: err } = await supabase
-          .from('game_players')
-          .select('id, user_id, submission_url, submission_type')
-          .eq('game_id', gameId)
-          .eq('status', 'submitted')
-          .order('id', { ascending: true });
+        // Charge toutes les soumissions via une route serveur (service role)
+        // pour bypasser le RLS et garantir que tous les joueurs voient
+        // exactement les mêmes données, dans le même ordre.
+        const submissionsRes = await fetch(`/api/games/${gameId}/submissions`);
+        if (!submissionsRes.ok) {
+          setError('Impossible de charger les soumissions');
+          setLoading(false);
+          return;
+        }
+        const { submissions: players } = await submissionsRes.json();
 
-        if (err) { setError(err.message); setLoading(false); return; }
-
-        const list: Rendu[] = (players ?? []).map((p) => ({
+        const list: Rendu[] = (players ?? []).map((p: { id: string; user_id: string; submission_url: string | null; submission_type: string | null }) => ({
           id:      p.id,
           auteur:  'ANONYME',
           fichier: p.submission_url ?? '',
@@ -247,7 +245,8 @@ function VotePageInner() {
   }, [votingStartedAt, rendus.length]);
 
   // Synchro realtime : si voting_started_at change en DB (depuis un autre client),
-  // on met à jour localement. Si la partie passe à 'finished', on redirige.
+  // on met à jour localement. On ne redirige PAS sur 'finished' ici : chaque
+  // joueur attend son propre timer pour ne pas être éjecté prématurément.
   useEffect(() => {
     if (!gameId) return;
 
@@ -257,14 +256,10 @@ function VotePageInner() {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` },
         (payload) => {
-          const updated = payload.new as { voting_started_at?: string; status?: string };
+          const updated = payload.new as { voting_started_at?: string };
           if (updated.voting_started_at) {
             const ts = new Date(updated.voting_started_at).getTime();
             setVotingStartedAt((prev) => (prev !== ts ? ts : prev));
-          }
-          if (updated.status === 'finished' && !redirectedRef.current) {
-            redirectedRef.current = true;
-            router.push(`/resultats?gameId=${gameId}`);
           }
         }
       )
