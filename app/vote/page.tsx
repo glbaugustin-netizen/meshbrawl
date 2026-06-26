@@ -113,24 +113,35 @@ function VotePageInner() {
           return;
         }
 
-        // Charge toutes les soumissions via une route serveur (service role)
-        // pour bypasser le RLS et garantir que tous les joueurs voient
-        // exactement les mêmes données, dans le même ordre.
-        const submissionsRes = await fetch(`/api/games/${gameId}/submissions`);
-        if (!submissionsRes.ok) {
-          setError('Impossible de charger les soumissions');
-          setLoading(false);
-          return;
-        }
-        const { submissions: players } = await submissionsRes.json();
+        // Charge toutes les soumissions via une route serveur (service role).
+        // On attend que TOUS les joueurs aient soumis (max 60 tentatives × 2s)
+        // pour éviter que le timer démarre avant que tout le monde soit prêt.
+        type RawPlayer = { id: string; user_id: string; submission_url: string | null; submission_type: string | null };
 
-        const list: Rendu[] = (players ?? []).map((p: { id: string; user_id: string; submission_url: string | null; submission_type: string | null }) => ({
-          id:      p.id,
-          auteur:  'ANONYME',
-          fichier: p.submission_url ?? '',
-          type:    (p.submission_type === 'video' ? 'video' : 'glb') as 'glb' | 'video',
-          isMine:  p.user_id === user.id,
-        }));
+        let list: Rendu[] = [];
+        let totalPlayers = 0;
+
+        for (let attempt = 0; attempt < 60; attempt++) {
+          const submissionsRes = await fetch(`/api/games/${gameId}/submissions`);
+          if (!submissionsRes.ok) {
+            setError('Impossible de charger les soumissions');
+            setLoading(false);
+            return;
+          }
+          const { submissions: players, totalPlayers: total } = await submissionsRes.json();
+          totalPlayers = total as number;
+          list = (players as RawPlayer[]).map((p) => ({
+            id:      p.id,
+            auteur:  'ANONYME',
+            fichier: p.submission_url ?? '',
+            type:    (p.submission_type === 'video' ? 'video' : 'glb') as 'glb' | 'video',
+            isMine:  p.user_id === user.id,
+          }));
+          // Toutes les soumissions sont là → on peut démarrer
+          if (list.length >= totalPlayers && totalPlayers > 0) break;
+          // Sinon on attend 2s et on réessaie
+          await new Promise((r) => setTimeout(r, 2000));
+        }
 
         setRendus(list);
 

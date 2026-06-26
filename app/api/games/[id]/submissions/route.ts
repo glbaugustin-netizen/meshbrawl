@@ -35,14 +35,23 @@ export async function GET(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const { data, error } = await admin
-    .from('game_players')
-    .select('id, user_id, submission_url, submission_type')
-    .eq('game_id', gameId)
-    .eq('status', 'submitted')
-    .order('id', { ascending: true })
+  const [submittedRes, totalRes] = await Promise.all([
+    admin
+      .from('game_players')
+      .select('id, user_id, submission_url, submission_type')
+      .eq('game_id', gameId)
+      .eq('status', 'submitted')
+      .order('id', { ascending: true }),
+    admin
+      .from('game_players')
+      .select('*', { count: 'exact', head: true })
+      .eq('game_id', gameId),
+  ])
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (submittedRes.error) return NextResponse.json({ error: submittedRes.error.message }, { status: 500 })
 
-  return NextResponse.json({ submissions: data ?? [] })
+  return NextResponse.json({
+    submissions:  submittedRes.data ?? [],
+    totalPlayers: totalRes.count ?? 0,
+  })
 }
