@@ -578,12 +578,15 @@ function BriefContent({ game }: { game: Game }) {
   if (mode === 'imaginaire') {
     return (
       <>
-        <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none mb-4" style={{ fontSize: "42px" }}>
+        <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none mb-2" style={{ fontSize: "42px" }}>
           {(game.brief_objet as string || '???').toUpperCase()}
         </p>
+        {game.brief_style && (
+          <p className="font-bangers uppercase tracking-widest text-[#1a1a1a]/70 leading-none mb-4" style={{ fontSize: "26px" }}>
+            DANS LE STYLE <span className="text-[#2e6bff]">{(game.brief_style as string).toUpperCase()}</span>
+          </p>
+        )}
         <div className="flex flex-wrap gap-3">
-          {game.brief_style && <BriefBadge bg="#2e6bff" color="#fff">{(game.brief_style as string).toUpperCase()}</BriefBadge>}
-          {game.brief_contrainte && <BriefBadge bg="#ff9500" color="#1a1a1a">{(game.brief_contrainte as string).toUpperCase()}</BriefBadge>}
           <BriefBadge bg="#ffd400" color="#1a1a1a">IMAGINAIRE</BriefBadge>
         </div>
       </>

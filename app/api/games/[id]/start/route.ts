@@ -18,10 +18,29 @@ const styles = [
   'Low-poly', 'Glacial', 'Doré / Royal', 'Rouillé / Usé',
 ]
 
-const contraintes = [
-  'Low-poly uniquement', 'Symétrique', 'Sans textures',
-  'Doit flotter dans les airs', 'Doit être cassé / détruit',
-  'Doit être géant', 'Doit être miniature',
+// Contextes partagés par toutes les durées du mode imaginaire
+const contextes = [
+  'Préhistorique', 'Punk', 'Cyberpunk', 'Antique', 'Médiéval',
+  'Futuriste', 'Cartoon', 'Réaliste', 'Nature / Organique', 'Sous-marin',
+  'Rouillé / Usé', 'Art déco', 'Industriel', 'Solarpunk', 'Dieselpunk',
+]
+
+// Objets imaginaire répartis par durée
+const objetsImaginaire30min = [
+  'Fusée', 'Épée', 'Hache', 'Bouclier', 'Arc', 'Pistolet', 'Canon',
+  'Poignard', 'Lance', 'Phare', 'Cage', 'Totem', 'Téléphone', 'Sceptre',
+  'Lampe', 'Marteau', 'Réacteur', 'Coffre au trésor',
+]
+
+const objetsImaginaire1h = [
+  'Trottinette', 'Vélo', 'Skateboard', 'Perceuse', 'Montre',
+  'Ordinateur', 'Casque', 'Sac à dos', 'Appareil photo', 'Chalumeau',
+]
+
+const objetsImaginaire1j = [
+  'Moto', 'Tank', 'Sous-marin', 'Bateau pirate', 'Hélicoptère',
+  'Montgolfière', 'Voilier', 'Vaisseau spatial', 'Guitare', 'Violon',
+  'Trompette', 'Piano', 'Robot', 'Drone', 'Ordinateur', 'Pont', 'Satellite',
 ]
 
 const actions = [
@@ -129,10 +148,14 @@ export async function POST(
   let brief: Record<string, string> = {}
 
   if (game.mode === 'imaginaire') {
+    // Objet selon la durée (le mode imaginaire bloque 5h et 1 semaine)
+    const objetPool =
+      game.duration_seconds <= 1800 ? objetsImaginaire30min
+      : game.duration_seconds <= 3600 ? objetsImaginaire1h
+      : objetsImaginaire1j
     brief = {
-      brief_objet:      random(objets),
-      brief_style:      random(styles),
-      brief_contrainte: Math.random() > 0.5 ? random(contraintes) : '',
+      brief_objet: random(objetPool),
+      brief_style: random(contextes),
     }
   } else if (game.mode === 'texturing') {
     brief = { brief_style: random(styles) }

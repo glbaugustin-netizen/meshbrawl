@@ -49,7 +49,7 @@ const BLOCKED_DURATIONS: Partial<Record<ModeId, DurationId[]>> = {
   modelisation: ["30min", "1h", "1sem"],
   texturing:    ["1sem"],
   animation:    ["1sem"],
-  imaginaire:   ["1sem"],
+  imaginaire:   ["5h", "1sem"],
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
