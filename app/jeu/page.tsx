@@ -39,6 +39,41 @@ function parseUtcMs(ts: string | null): number {
   return new Date(hasTz ? ts : ts + 'Z').getTime();
 }
 
+const MAX_GLB_BYTES = 20 * 1024 * 1024; // 20 MB
+
+// Compresse la géométrie d'un GLB avec meshopt (EXT_meshopt_compression) via
+// gltf-transform. Tourne entièrement dans le navigateur : le wasm meshoptimizer
+// est inliné (aucun fetch/fs externe), donc fiable dans le bundle. Les libs sont
+// importées dynamiquement pour ne pas alourdir le bundle initial.
+// NB : meshopt optimise la géométrie (vertices/faces), pas les textures embarquées.
+// <model-viewer> décode nativement EXT_meshopt_compression → le rendu reste OK.
+async function compressGlb(file: File): Promise<File> {
+  const [core, extensions, functions, meshoptimizer] = await Promise.all([
+    import('@gltf-transform/core'),
+    import('@gltf-transform/extensions'),
+    import('@gltf-transform/functions'),
+    import('meshoptimizer'),
+  ]);
+
+  const { MeshoptEncoder, MeshoptDecoder } = meshoptimizer;
+  await MeshoptEncoder.ready;
+  await MeshoptDecoder.ready;
+
+  const io = new core.WebIO()
+    .registerExtensions(extensions.ALL_EXTENSIONS)
+    .registerDependencies({
+      'meshopt.encoder': MeshoptEncoder,
+      'meshopt.decoder': MeshoptDecoder,
+    });
+
+  const input  = new Uint8Array(await file.arrayBuffer());
+  const doc    = await io.readBinary(input);
+  await doc.transform(functions.meshopt({ encoder: MeshoptEncoder }));
+  const output = await io.writeBinary(doc);
+
+  return new File([output as BlobPart], file.name, { type: 'model/gltf-binary' });
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function JeuPage() {
@@ -66,6 +101,8 @@ function JeuPageInner() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [file,       setFile]       = useState<File | null>(null);
   const [uploading,  setUploading]  = useState(false);
+  const [compressing, setCompressing] = useState(false);
+  const [compressInfo, setCompressInfo] = useState('');
   const [submitted,  setSubmitted]  = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [gameLoaded,  setGameLoaded]  = useState(false);
@@ -182,12 +219,39 @@ function JeuPageInner() {
   // Upload
   const handleUpload = async (f: File) => {
     setUploadError('');
+    setCompressInfo('');
     const isVideo = f.type.startsWith('video/');
     const isGLB   = f.name.toLowerCase().endsWith('.glb');
     if (!isVideo && !isGLB) {
       setUploadError('Fichier invalide — .glb ou vidéo uniquement');
       return;
     }
+
+    // Compression auto des GLB > 20 MB (Draco, côté navigateur)
+    if (isGLB && f.size > MAX_GLB_BYTES) {
+      setCompressing(true);
+      try {
+        const compressed = await compressGlb(f);
+        const beforeMB = (f.size / 1024 / 1024).toFixed(1);
+        const afterMB  = (compressed.size / 1024 / 1024).toFixed(1);
+        // On garde le plus petit des deux (la compression peut, rarement, ne rien gagner)
+        const finalFile = compressed.size < f.size ? compressed : f;
+        setFile(finalFile);
+        setCompressInfo(
+          finalFile === compressed
+            ? `Compressé : ${beforeMB} MB → ${afterMB} MB`
+            : `Compression sans gain — fichier original conservé (${beforeMB} MB)`
+        );
+      } catch (e) {
+        console.error('Compression GLB échouée:', e);
+        setFile(f); // on n'empêche jamais la soumission
+        setCompressInfo('Compression impossible — fichier original conservé');
+      } finally {
+        setCompressing(false);
+      }
+      return;
+    }
+
     setFile(f);
   };
 
@@ -346,6 +410,19 @@ function JeuPageInner() {
                     En attente des autres brawlers...
                   </p>
                 </div>
+              ) : compressing ? (
+                <div
+                  className="flex flex-col items-center justify-center gap-4 rounded-[16px] p-10"
+                  style={{ backgroundColor: "#fff7cc", border: "3px dashed #b9a300" }}
+                >
+                  <span className="inline-block w-10 h-10 border-[4px] border-[#b9a300] border-t-transparent rounded-full animate-spin" />
+                  <p className="font-bangers uppercase tracking-widest text-[#b9a300] text-center" style={{ fontSize: "26px" }}>
+                    COMPRESSION EN COURS...
+                  </p>
+                  <p className="font-archivo text-xs text-center text-[#b9a300]" style={{ fontWeight: 600 }}>
+                    Fichier &gt; 20 MB — optimisation Draco, ça peut prendre quelques secondes
+                  </p>
+                </div>
               ) : (
                 <div
                   onDragOver={handleDragOver}
@@ -366,9 +443,14 @@ function JeuPageInner() {
                       <p className="font-archivo text-xs text-[#0aa36b]/70 text-center" style={{ fontWeight: 600 }}>
                         {(file.size / 1024 / 1024).toFixed(2)} MB — Fichier prêt
                       </p>
+                      {compressInfo && (
+                        <p className="font-archivo-black text-[11px] uppercase tracking-wide text-[#2e6bff] text-center">
+                          {compressInfo}
+                        </p>
+                      )}
                       <button
                         type="button"
-                        onClick={() => setFile(null)}
+                        onClick={() => { setFile(null); setCompressInfo(''); }}
                         className="font-archivo-black text-xs uppercase tracking-wide text-[#ff2e2e] underline underline-offset-2 hover:opacity-70 transition-opacity"
                       >
                         Retirer
@@ -381,7 +463,7 @@ function JeuPageInner() {
                         {isDragOver ? "LACHE TON FICHIER !" : "GLISSE TON FICHIER ICI"}
                       </p>
                       <p className="font-archivo text-xs text-center" style={{ color: "#b9a300", fontWeight: 500 }}>
-                        .glb ou vidéo • max 20MB
+                        .glb ou vidéo • les .glb &gt; 20 MB sont compressés auto
                       </p>
                       <Button
                         variant="secondary"
