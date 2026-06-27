@@ -314,7 +314,7 @@ function VotePageInner() {
   }
 
   const rendu       = rendus[currentIndex];
-  const progressPct = rendus.length > 0 ? ((currentIndex + 1) / rendus.length) * 100 : 0;
+  const progressPct = ((VOTE_DURATION - timer) / VOTE_DURATION) * 100;
   const isUrgent    = timer <= 10;
 
   return (
