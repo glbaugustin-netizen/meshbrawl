@@ -96,11 +96,64 @@ export async function GET(
     }
   }
 
+  // ─── Complétion anticipée des slots de vote ──────────────────────────────────
+  // Pour chaque rendu, les votants requis = tous les autres rendus (on ne vote
+  // jamais pour soi-même) → required = nb de rendus - 1. Dès que TOUS ont voté
+  // pour une cible, on enregistre completed_at = now() (heure serveur, une seule
+  // fois). Tous les clients lisent ce timestamp partagé et avancent leur chrono
+  // de façon synchronisée — jamais de décision locale qui désyncroniserait.
+  let completions: { targetPlayerId: string; completedAt: number }[] = []
+
+  if (votingStartedAtMs !== null && submissions.length >= 2) {
+    const required     = submissions.length - 1
+    const submittedIds = new Set(submissions.map((s) => s.id))
+
+    const { data: votesData } = await admin
+      .from('votes')
+      .select('target_player_id, voter_id')
+      .eq('game_id', gameId)
+
+    // Votants DISTINCTS par cible (robuste à un éventuel double-vote)
+    const voters: Record<string, Set<string>> = {}
+    for (const v of votesData ?? []) {
+      const t = v.target_player_id as string
+      if (!submittedIds.has(t)) continue
+      ;(voters[t] ??= new Set()).add(v.voter_id as string)
+    }
+
+    // Cibles dont tous les votants requis ont voté
+    const completeTargets = submissions
+      .map((s) => s.id)
+      .filter((id) => (voters[id]?.size ?? 0) >= required)
+
+    if (completeTargets.length > 0) {
+      // upsert "ignore duplicates" : la 1re complétion garde son completed_at
+      // (default now()), les appels suivants ne l'écrasent pas.
+      await admin
+        .from('vote_completions')
+        .upsert(
+          completeTargets.map((id) => ({ game_id: gameId, target_player_id: id })),
+          { onConflict: 'game_id,target_player_id', ignoreDuplicates: true }
+        )
+    }
+
+    const { data: compRows } = await admin
+      .from('vote_completions')
+      .select('target_player_id, completed_at')
+      .eq('game_id', gameId)
+
+    completions = (compRows ?? []).map((c) => ({
+      targetPlayerId: c.target_player_id as string,
+      completedAt:    new Date(c.completed_at as string).getTime(),
+    }))
+  }
+
   return NextResponse.json({
     submissions,
     totalPlayers,
     votingStartedAt: votingStartedAtMs, // epoch ms ou null
     serverNow:       Date.now(),        // epoch ms — permet de corriger le décalage d'horloge
     status:          gameRes.data?.status ?? 'in_progress',
+    completions,                         // [{ targetPlayerId, completedAt(ms) }]
   })
 }

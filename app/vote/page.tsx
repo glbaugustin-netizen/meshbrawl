@@ -76,6 +76,10 @@ function VotePageInner() {
   // Permet de comparer voting_started_at (timestamp serveur) à une "heure locale
   // corrigée", éliminant les écarts d'horloge entre les différents PC.
   const clockOffsetRef = useRef(0);
+  // Complétions anticipées : target_player_id (= rendu.id) → completed_at (ms
+  // serveur). Quand tous ont voté pour un rendu, le serveur stampe l'heure ; la
+  // timeline coupe alors ce slot à completed_at + 3s (synchronisé entre clients).
+  const completionsRef = useRef<Record<string, number>>({});
 
   // Load model-viewer CDN script once
   useEffect(() => {
@@ -115,6 +119,7 @@ function VotePageInner() {
           votingStartedAt: number | null;
           serverNow: number;
           status: string;
+          completions?: { targetPlayerId: string; completedAt: number }[];
         };
 
         let list: Rendu[] = [];
@@ -131,6 +136,13 @@ function VotePageInner() {
 
           // Corrige le décalage d'horloge local ↔ serveur à chaque réponse
           clockOffsetRef.current = data.serverNow - Date.now();
+
+          // Capture les complétions déjà connues (utile après un refresh)
+          if (Array.isArray(data.completions)) {
+            const map: Record<string, number> = {};
+            for (const c of data.completions) map[c.targetPlayerId] = c.completedAt;
+            completionsRef.current = map;
+          }
 
           // Partie déjà terminée → résultats
           if (data.status === 'finished') {
@@ -185,56 +197,90 @@ function VotePageInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 
-  // Calcule l'index courant basé sur voting_started_at
+  // Timeline de vote synchronisée (index + chrono en un seul calcul).
+  // Chaque rendu a un slot de VOTE_DURATION s, MAIS un slot peut se terminer en
+  // avance : quand tous ont voté avec > 5s restantes, le slot coupe à
+  // completed_at + 3s, décalant d'autant les slots suivants. Tous les clients
+  // partagent voting_started_at ET les completed_at (heure serveur) → calcul
+  // identique partout, aucune décision locale qui désyncroniserait.
+  // Sans complétion, on retombe EXACTEMENT sur l'ancienne timeline.
   useEffect(() => {
     if (!votingStartedAt || rendus.length === 0) return;
 
-    const calcIndex = () => {
-      // Heure locale corrigée du décalage avec le serveur
-      const elapsed = (Date.now() + clockOffsetRef.current) - votingStartedAt;
+    const tick = () => {
+      const nowC = Date.now() + clockOffsetRef.current;
 
-      if (elapsed < 0) return;
+      // Avant le départ → premier slot, chrono plein
+      if (nowC < votingStartedAt) {
+        setCurrentIndex(0);
+        setTimer(VOTE_DURATION);
+        return;
+      }
 
-      const idx = Math.floor(elapsed / (VOTE_DURATION * 1000));
+      let slotStart = votingStartedAt;
+      for (let i = 0; i < rendus.length; i++) {
+        const nominalEnd = slotStart + VOTE_DURATION * 1000;
+        let actualEnd = nominalEnd;
 
-      if (idx >= rendus.length) {
-        // Fenêtre de vote terminée pour tout le monde (timer partagé) → résultats.
-        // C'est la page /resultats qui déclenche calculate-elo (protégé côté
-        // serveur pour ne jamais finir avant la fin réelle de la fenêtre).
-        if (!redirectedRef.current) {
-          redirectedRef.current = true;
-          router.push(`/resultats?gameId=${gameId}`);
+        const comp = completionsRef.current[rendus[i].id];
+        if (comp != null && nominalEnd - comp > 5000) {
+          // Tous ont voté avec > 5s restantes → on coupe à completed_at + 3s
+          actualEnd = Math.min(nominalEnd, comp + 3000);
         }
-      } else {
-        setCurrentIndex((prev) => {
-          if (prev !== idx) setFlashColor(null);
-          return idx;
-        });
+
+        if (nowC < actualEnd) {
+          setCurrentIndex((prev) => { if (prev !== i) setFlashColor(null); return i; });
+          setTimer(Math.max(0, Math.ceil((actualEnd - nowC) / 1000)));
+          return;
+        }
+        slotStart = actualEnd;
+      }
+
+      // Toutes les fenêtres écoulées → résultats. C'est /resultats qui déclenche
+      // calculate-elo (protégé côté serveur).
+      if (!redirectedRef.current) {
+        redirectedRef.current = true;
+        router.push(`/resultats?gameId=${gameId}`);
       }
     };
 
-    calcIndex();
-    const interval = setInterval(calcIndex, 1000);
+    tick();
+    const interval = setInterval(tick, 250);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [votingStartedAt, rendus.length, gameId, router]);
 
-  // Met à jour le timer chaque 500ms
+  // Poll des complétions + resync horloge pendant toute la phase de vote.
   useEffect(() => {
-    if (!votingStartedAt || rendus.length === 0) return;
+    if (!votingStartedAt || !gameId) return;
+    let active = true;
 
-    const updateTimer = () => {
-      const elapsed = (Date.now() + clockOffsetRef.current) - votingStartedAt;
-      if (elapsed < 0) { setTimer(VOTE_DURATION); return; }
-      const timeInSlot = elapsed % (VOTE_DURATION * 1000);
-      const remaining = Math.max(0, VOTE_DURATION - Math.floor(timeInSlot / 1000));
-      setTimer(remaining);
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/games/${gameId}/submissions`);
+        if (!res.ok || !active) return;
+        const data = await res.json();
+        if (!active) return;
+        if (typeof data.serverNow === 'number') {
+          clockOffsetRef.current = data.serverNow - Date.now();
+        }
+        if (Array.isArray(data.completions)) {
+          const map: Record<string, number> = {};
+          for (const c of data.completions) map[c.targetPlayerId] = c.completedAt;
+          completionsRef.current = map;
+        }
+        if (data.status === 'finished' && !redirectedRef.current) {
+          redirectedRef.current = true;
+          router.push(`/resultats?gameId=${gameId}`);
+        }
+      } catch {}
     };
 
-    updateTimer();
-    const interval = setInterval(updateTimer, 500);
-    return () => clearInterval(interval);
-  }, [votingStartedAt, rendus.length]);
+    poll();
+    const interval = setInterval(poll, 2000);
+    return () => { active = false; clearInterval(interval); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [votingStartedAt, gameId, router]);
 
   // Vote handler
   const handleVote = async (type: "bien" | "mal" | "etoile") => {
