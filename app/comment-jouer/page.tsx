@@ -35,7 +35,7 @@ const MODES = [
 ];
 
 const DUREES = [
-  { duree: "10 MIN",    diff: "Contraintes extrêmes, speed run" },
+  { duree: "30 MIN",    diff: "Contraintes extrêmes, speed run" },
   { duree: "1 HEURE",  diff: "Objet simple" },
   { duree: "5 HEURES", diff: "Objet détaillé" },
   { duree: "1 JOUR",   diff: "Scène complexe" },

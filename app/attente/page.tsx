@@ -13,7 +13,7 @@ const MIN_PLAYERS      = 3;
 const COUNTDOWN_START  = 30;
 
 const DURATION_LABELS: Record<number, string> = {
-  600:    '10 MIN',
+  1800:   '30 MIN',
   3600:   '1 HEURE',
   18000:  '5 HEURES',
   86400:  '1 JOUR',

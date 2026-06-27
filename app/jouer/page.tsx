@@ -6,7 +6,7 @@ import Button from "@/components/Button";
 // ─── Static data ──────────────────────────────────────────────────────────────
 
 type ModeId = "modelisation" | "texturing" | "animation" | "imaginaire";
-type DurationId = "10min" | "1h" | "5h" | "1j" | "1sem";
+type DurationId = "30min" | "1h" | "5h" | "1j" | "1sem";
 
 const MODES: { id: ModeId; label: string; description: string; icon: React.ReactNode }[] = [
   {
@@ -36,7 +36,7 @@ const MODES: { id: ModeId; label: string; description: string; icon: React.React
 ];
 
 const DURATIONS: { id: DurationId; label: string; sub: string }[] = [
-  { id: "10min", label: "10 MIN", sub: "Pour les speed runners" },
+  { id: "30min", label: "30 MIN", sub: "Pour les speed runners" },
   { id: "1h", label: "1 HEURE", sub: "Un objet simple, vite fait" },
   { id: "5h", label: "5 HEURES", sub: "Place au détail" },
   { id: "1j", label: "1 JOUR", sub: "Prends ton temps" },

@@ -8,7 +8,7 @@ import Button from "@/components/Button";
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 type ModeId = "modelisation" | "texturing" | "animation" | "imaginaire";
-type DurationId = "10min" | "1h" | "5h" | "1j" | "1sem";
+type DurationId = "30min" | "1h" | "5h" | "1j" | "1sem";
 
 const MODES: { id: ModeId; label: string; description: string; icon: React.ReactNode }[] = [
   {
@@ -38,7 +38,7 @@ const MODES: { id: ModeId; label: string; description: string; icon: React.React
 ];
 
 const DURATIONS: { id: DurationId; label: string; sub: string }[] = [
-  { id: "10min", label: "10 MIN",    sub: "Speed run" },
+  { id: "30min", label: "30 MIN",    sub: "Speed run" },
   { id: "1h",    label: "1 HEURE",  sub: "Objet simple" },
   { id: "5h",    label: "5 HEURES", sub: "Objet détaillé" },
   { id: "1j",    label: "1 JOUR",   sub: "Scène complète" },
@@ -46,7 +46,7 @@ const DURATIONS: { id: DurationId; label: string; sub: string }[] = [
 ];
 
 const BLOCKED_DURATIONS: Partial<Record<ModeId, DurationId[]>> = {
-  modelisation: ["10min", "1h", "1sem"],
+  modelisation: ["30min", "1h", "1sem"],
   texturing:    ["1sem"],
   animation:    ["1sem"],
   imaginaire:   ["1sem"],
@@ -55,7 +55,7 @@ const BLOCKED_DURATIONS: Partial<Record<ModeId, DurationId[]>> = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const durationMap: Record<string, number> = {
-  '10 MIN':    600,
+  '30 MIN':    1800,
   '1 HEURE':   3600,
   '5 HEURES':  18000,
   '1 JOUR':    86400,
