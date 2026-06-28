@@ -252,20 +252,20 @@ export default function NewsletterPanel({ isOpen, onClose, isAdmin, onNewsletter
                     type="button"
                     onClick={() => setSelected(n)}
                     className="w-full text-left p-5 flex flex-col gap-2 transition-all duration-100 hover:-translate-y-[2px]"
-                    style={{ backgroundColor: "#1a1a1a", border: "4px solid #1a1a1a", borderRadius: "14px", boxShadow: "4px 4px 0 #ff2e2e" }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "4px 7px 0 #ff2e2e"; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "4px 4px 0 #ff2e2e"; }}
+                    style={{ backgroundColor: "#fff", border: "4px solid #1a1a1a", borderRadius: "14px", boxShadow: "4px 4px 0 #1a1a1a" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "4px 7px 0 #1a1a1a"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "4px 4px 0 #1a1a1a"; }}
                   >
-                    <p className="font-archivo-black text-[10px] uppercase tracking-widest" style={{ color: "#ffd400", opacity: 0.5 }}>
+                    <p className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a]/50">
                       {formatDate(n.created_at)}
                     </p>
-                    <p className="font-bangers uppercase tracking-widest leading-tight" style={{ fontSize: "22px", color: "#ffd400" }}>
+                    <p className="font-bangers uppercase tracking-widest leading-tight" style={{ fontSize: "22px", color: "#ff2e2e" }}>
                       {n.title}
                     </p>
-                    <p className="font-archivo text-xs text-white/60 leading-relaxed line-clamp-2" style={{ fontWeight: 600 }}>
+                    <p className="font-archivo text-xs text-[#1a1a1a]/70 leading-relaxed line-clamp-2" style={{ fontWeight: 600 }}>
                       {n.content}
                     </p>
-                    <span className="font-archivo-black text-[10px] uppercase tracking-widest text-[#ff2e2e] mt-1">
+                    <span className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a] mt-1">
                       LIRE →
                     </span>
                   </button>
