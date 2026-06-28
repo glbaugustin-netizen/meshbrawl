@@ -325,7 +325,7 @@ function DiscordButton() {
       onClick={handleClick}
       className="w-full flex items-center justify-center gap-3 font-archivo-black text-sm uppercase tracking-wide text-white transition-all duration-100 hover:-translate-y-[2px]"
       style={{
-        border: "4px solid #5865F2",
+        border: "4px solid #1a1a1a",
         borderRadius: "12px",
         padding: "13px 20px",
         backgroundColor: "#5865F2",
