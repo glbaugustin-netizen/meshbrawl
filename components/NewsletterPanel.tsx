@@ -225,19 +225,17 @@ export default function NewsletterPanel({ isOpen, onClose, isAdmin, onNewsletter
             </div>
           ) : (
             /* Liste des articles */
-            <div className="flex flex-col gap-0">
+            <div className="flex flex-col gap-4 p-5">
               {isAdmin && (
-                <div className="px-6 py-4" style={{ borderBottom: "3px solid #1a1a1a" }}>
-                  <button
-                    type="button"
-                    onClick={() => setWriting(true)}
-                    className="w-full font-bangers uppercase tracking-widest text-[#1a1a1a] bg-[#ffd400] border-[4px] border-[#1a1a1a] py-3 flex items-center justify-center gap-2 transition-all duration-100 hover:-translate-y-[2px]"
-                    style={{ borderRadius: "12px", boxShadow: "0 5px 0 #1a1a1a", fontSize: "18px" }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    NOUVELLE NEWS
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setWriting(true)}
+                  className="w-full font-bangers uppercase tracking-widest text-[#1a1a1a] bg-[#ffd400] border-[4px] border-[#1a1a1a] py-3 flex items-center justify-center gap-2 transition-all duration-100 hover:-translate-y-[2px]"
+                  style={{ borderRadius: "12px", boxShadow: "0 5px 0 #1a1a1a", fontSize: "18px" }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  NOUVELLE NEWS
+                </button>
               )}
 
               {newsletters.length === 0 ? (
@@ -248,21 +246,23 @@ export default function NewsletterPanel({ isOpen, onClose, isAdmin, onNewsletter
                   </p>
                 </div>
               ) : (
-                newsletters.map((n, i) => (
+                newsletters.map((n) => (
                   <button
                     key={n.id}
                     type="button"
                     onClick={() => setSelected(n)}
-                    className="w-full text-left px-6 py-5 flex flex-col gap-1.5 transition-colors duration-100 hover:bg-[#fffbe6]"
-                    style={{ borderBottom: i < newsletters.length - 1 ? "3px solid #1a1a1a" : undefined }}
+                    className="w-full text-left p-5 flex flex-col gap-2 transition-all duration-100 hover:-translate-y-[2px]"
+                    style={{ backgroundColor: "#1a1a1a", border: "4px solid #1a1a1a", borderRadius: "14px", boxShadow: "4px 4px 0 #ff2e2e" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "4px 7px 0 #ff2e2e"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "4px 4px 0 #ff2e2e"; }}
                   >
-                    <p className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a]/40">
+                    <p className="font-archivo-black text-[10px] uppercase tracking-widest" style={{ color: "#ffd400", opacity: 0.5 }}>
                       {formatDate(n.created_at)}
                     </p>
-                    <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-tight" style={{ fontSize: "20px" }}>
+                    <p className="font-bangers uppercase tracking-widest leading-tight" style={{ fontSize: "22px", color: "#ffd400" }}>
                       {n.title}
                     </p>
-                    <p className="font-archivo text-xs text-[#1a1a1a]/60 leading-relaxed line-clamp-2" style={{ fontWeight: 600 }}>
+                    <p className="font-archivo text-xs text-white/60 leading-relaxed line-clamp-2" style={{ fontWeight: 600 }}>
                       {n.content}
                     </p>
                     <span className="font-archivo-black text-[10px] uppercase tracking-widest text-[#ff2e2e] mt-1">
