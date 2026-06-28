@@ -40,12 +40,36 @@ export async function POST(
   // GARDE TEMPORELLE : on refuse de terminer la partie tant que la fenêtre de
   // vote partagée n'est pas écoulée. Empêche n'importe quel joueur (timer en
   // avance, horloge décalée…) de clôturer prématurément le vote des autres.
-  const submittedCount = players.filter((p) => p.status === 'submitted').length
+  const submitted      = players.filter((p) => p.status === 'submitted')
+  const submittedCount = submitted.length
   if (game.voting_started_at && submittedCount > 0) {
     const startMs   = new Date(game.voting_started_at).getTime()
     const windowEnd = startMs + submittedCount * VOTE_DURATION_MS
     if (Date.now() < windowEnd) {
-      return NextResponse.json({ ok: false, tooEarly: true })
+      // Clôture anticipée : si TOUS les votes requis sont déjà tombés (vérifié
+      // côté serveur sur la table votes), on autorise la fin avant la fenêtre
+      // complète — cohérent avec la complétion anticipée des slots de vote. Sinon
+      // on attend la fin de la fenêtre partagée (protège contre un client en
+      // avance qui clôturerait le vote des autres).
+      let allVotesIn = false
+      if (submittedCount >= 2) {
+        const { data: earlyVotes } = await supabase
+          .from('votes')
+          .select('target_player_id, voter_id')
+          .eq('game_id', gameId)
+        const required     = submittedCount - 1
+        const submittedIds = new Set(submitted.map((s) => s.id))
+        const voters: Record<string, Set<string>> = {}
+        for (const v of earlyVotes ?? []) {
+          const t = v.target_player_id as string
+          if (!submittedIds.has(t)) continue
+          ;(voters[t] ??= new Set()).add(v.voter_id as string)
+        }
+        allVotesIn = submitted.every((s) => (voters[s.id]?.size ?? 0) >= required)
+      }
+      if (!allVotesIn) {
+        return NextResponse.json({ ok: false, tooEarly: true })
+      }
     }
   }
 

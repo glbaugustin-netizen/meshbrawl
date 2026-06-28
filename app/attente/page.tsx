@@ -195,37 +195,44 @@ function AttentePageInner() {
     }, 1000);
   }
 
-  // Countdown + auto-lancement
+  // Countdown + auto-lancement.
+  // ⚠️ Cet effet re-run à chaque changement de players.length (joueur qui
+  // rejoint/part). Il ne FAUT PAS clear l'interval dans son cleanup, sinon le
+  // compte à rebours se fige dès qu'un joueur rejoint (interval cleared puis
+  // jamais recréé car countdownStarted est déjà true). L'interval n'est créé/
+  // détruit qu'au franchissement du seuil MIN_PLAYERS, et nettoyé à l'unmount.
   useEffect(() => {
     if (players.length >= 10) { startGame(); return; }
 
-    if (players.length >= MIN_PLAYERS) {
-      if (!countdownStarted.current) {
-        countdownStarted.current = true;
-        setCountdown(COUNTDOWN_START);
+    const enough = players.length >= MIN_PLAYERS;
 
-        intervalRef.current = setInterval(() => {
-          setCountdown((c) => {
-            if (c <= 1) {
-              if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-              startGame();
-              return 0;
-            }
-            return c - 1;
-          });
-        }, 1000);
-      }
-    } else {
+    if (enough && !countdownStarted.current) {
+      countdownStarted.current = true;
+      setCountdown(COUNTDOWN_START);
+      intervalRef.current = setInterval(() => {
+        setCountdown((c) => {
+          if (c <= 1) {
+            if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+            startGame();
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+    } else if (!enough && countdownStarted.current) {
       countdownStarted.current = false;
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       setCountdown(COUNTDOWN_START);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [players.length]);
 
+  // Nettoyage de l'interval à l'unmount uniquement
+  useEffect(() => {
     return () => {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [players.length]);
+  }, []);
 
   // Quitter la partie
   const handleQuit = async () => {
