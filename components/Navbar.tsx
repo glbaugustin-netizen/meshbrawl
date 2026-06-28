@@ -6,6 +6,10 @@ import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/Button";
+import NewsletterPanel from "@/components/NewsletterPanel";
+
+const ADMIN_ID = '14f2b93c-1b7d-4806-822e-d687ea944bef';
+const STORAGE_KEY = 'newsletter_last_read';
 
 const NAV_LINKS = [
   { label: "ACCUEIL",       href: "/" },
@@ -25,10 +29,13 @@ const DROPDOWN_ITEMS = [
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const [menuOpen,    setMenuOpen]    = useState(false);
-  const [user,        setUser]        = useState<User | null>(null);
-  const [pseudo,      setPseudo]      = useState('');
-  const [avatarColor, setAvatarColor] = useState('#8a3ffc');
+  const [menuOpen,         setMenuOpen]         = useState(false);
+  const [user,             setUser]             = useState<User | null>(null);
+  const [pseudo,           setPseudo]           = useState('');
+  const [avatarColor,      setAvatarColor]      = useState('#8a3ffc');
+  const [newsOpen,         setNewsOpen]         = useState(false);
+  const [hasUnread,        setHasUnread]        = useState(false);
+  const [latestNewsletter, setLatestNewsletter] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -67,9 +74,26 @@ export default function Navbar() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Badge non lu : compare latest newsletter avec dernière lecture en localStorage
+  useEffect(() => {
+    if (!latestNewsletter) return;
+    const lastRead = localStorage.getItem(STORAGE_KEY);
+    setHasUnread(!lastRead || new Date(latestNewsletter) > new Date(lastRead));
+  }, [latestNewsletter]);
+
+  const handleOpenNews = () => {
+    setNewsOpen(true);
+    // Marque comme lu dès l'ouverture
+    if (latestNewsletter) {
+      localStorage.setItem(STORAGE_KEY, latestNewsletter);
+      setHasUnread(false);
+    }
+  };
+
   if (pathname.startsWith('/jeu') || pathname.startsWith('/vote')) return null;
 
   return (
+    <>
     <header className="sticky top-0 z-50 w-full" style={{ backgroundColor: "#1a1a1a", borderBottom: "3px solid #1a1a1a" }}>
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
 
@@ -93,6 +117,25 @@ export default function Navbar() {
 
         {/* Desktop right */}
         <div className="hidden md:flex items-center gap-3">
+          {/* Bouton mégaphone */}
+          <button
+            type="button"
+            onClick={handleOpenNews}
+            aria-label="Actualités"
+            className="relative flex items-center justify-center w-9 h-9 transition-transform duration-100 hover:scale-110"
+            style={{ color: "#ffd400" }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 11l19-9-9 19-2-8-8-2z" />
+            </svg>
+            {hasUnread && (
+              <span
+                className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-[2px] border-[#1a1a1a]"
+                style={{ backgroundColor: "#ff2e2e" }}
+              />
+            )}
+          </button>
+
           {user ? (
             <AvatarMenu user={user} pseudo={pseudo} avatarColor={avatarColor} />
           ) : (
@@ -139,11 +182,32 @@ export default function Navbar() {
                   CONNEXION
                 </Button>
               )}
+              <button
+                type="button"
+                onClick={() => { setMenuOpen(false); handleOpenNews(); }}
+                aria-label="Actualités"
+                className="relative flex items-center justify-center w-9 h-9"
+                style={{ color: "#ffd400" }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 11l19-9-9 19-2-8-8-2z" />
+                </svg>
+                {hasUnread && (
+                  <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-[2px] border-[#1a1a1a]" style={{ backgroundColor: "#ff2e2e" }} />
+                )}
+              </button>
             </li>
           </ul>
         </div>
       )}
     </header>
+      <NewsletterPanel
+        isOpen={newsOpen}
+        onClose={() => setNewsOpen(false)}
+        isAdmin={user?.id === ADMIN_ID}
+        onNewsletter={setLatestNewsletter}
+      />
+    </>
   );
 }
 
