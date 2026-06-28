@@ -138,7 +138,7 @@ export default async function Home() {
           <h2 className="font-archivo-black text-xl sm:text-2xl uppercase text-[#1a1a1a] tracking-widest">
             REJOINS LA BAGARRE :
           </h2>
-          <p className="font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a]/50 text-center" style={{ fontWeight: 700 }}>
+          <p className="font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a]/50 text-center" style={{ fontWeight: 700, paddingTop: "10px" }}>
             Tu as un modèle 3D ou un blueprint à partager ? Envoie-le nous !
           </p>
           <div className="flex justify-center gap-4 flex-wrap">
