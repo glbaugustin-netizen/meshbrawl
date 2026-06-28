@@ -38,7 +38,7 @@ export default function NewsletterPanel({ isOpen, onClose, isAdmin, onNewsletter
 
   // Charge les newsletters
   const load = async () => {
-    const res = await fetch('/api/newsletters');
+    const res = await fetch('/api/newsletters', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
     const list: Newsletter[] = data.newsletters ?? [];

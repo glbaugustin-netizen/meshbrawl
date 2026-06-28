@@ -3,6 +3,10 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
+// Empêche Next.js de mettre la réponse GET en cache statique (sinon les autres
+// comptes reçoivent une liste figée et ne voient pas les nouvelles newsletters).
+export const dynamic = 'force-dynamic'
+
 const ADMIN_ID = '14f2b93c-1b7d-4806-822e-d687ea944bef'
 
 const admin = () => createClient(
