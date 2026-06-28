@@ -155,5 +155,6 @@ export async function GET(
     serverNow:       Date.now(),        // epoch ms — permet de corriger le décalage d'horloge
     status:          gameRes.data?.status ?? 'in_progress',
     completions,                         // [{ targetPlayerId, completedAt(ms) }]
+    noSubmissions:   endsAtPassed && submissions.length === 0, // temps écoulé sans aucun rendu
   })
 }

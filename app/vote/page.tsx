@@ -120,6 +120,7 @@ function VotePageInner() {
           serverNow: number;
           status: string;
           completions?: { targetPlayerId: string; completedAt: number }[];
+          noSubmissions?: boolean;
         };
 
         let list: Rendu[] = [];
@@ -146,6 +147,13 @@ function VotePageInner() {
 
           // Partie déjà terminée → résultats
           if (data.status === 'finished') {
+            router.push(`/resultats?gameId=${gameId}`);
+            return;
+          }
+
+          // Temps écoulé et personne n'a soumis → directement aux résultats.
+          // calculate-elo appliquera la pénalité de non-soumission (-50) à tous.
+          if (data.noSubmissions) {
             router.push(`/resultats?gameId=${gameId}`);
             return;
           }

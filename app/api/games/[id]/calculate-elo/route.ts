@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js"
 import { NextResponse } from 'next/server'
 
 const VOTE_DURATION_MS = 60 * 1000
+const NO_SUBMISSION_PENALTY = -50 // ELO perdu si on ne soumet rien
 
 export async function POST(
   _req: Request,
@@ -19,7 +20,7 @@ export async function POST(
   // 1. Vérifie que la partie existe et n'est pas déjà calculée
   const { data: game } = await supabase
     .from('games')
-    .select('status, voting_started_at')
+    .select('status, voting_started_at, ends_at')
     .eq('id', gameId)
     .single()
 
@@ -42,6 +43,14 @@ export async function POST(
   // avance, horloge décalée…) de clôturer prématurément le vote des autres.
   const submitted      = players.filter((p) => p.status === 'submitted')
   const submittedCount = submitted.length
+
+  // Aucune soumission : on ne clôture qu'une fois le temps de partie écoulé.
+  // Ensuite tout le monde prend la pénalité de non-soumission (-50).
+  if (submittedCount === 0) {
+    const endsAtPassed = game.ends_at ? Date.now() > new Date(game.ends_at).getTime() : false
+    if (!endsAtPassed) return NextResponse.json({ ok: false, tooEarly: true })
+  }
+
   if (game.voting_started_at && submittedCount > 0) {
     const startMs   = new Date(game.voting_started_at).getTime()
     const windowEnd = startMs + submittedCount * VOTE_DURATION_MS
@@ -116,16 +125,21 @@ export async function POST(
     else if (vote_type === 'etoile') pointsMap[target_player_id] += 25
   })
 
-  // Joueurs sans aucun vote reçu → -2
+  // Soumetteurs sans aucun vote reçu → -2
   players.forEach((p) => {
+    if (p.status !== 'submitted') return
     const hasVotes = (votes ?? []).some((v) => v.target_player_id === p.id)
     if (!hasVotes) pointsMap[p.id] = -2
   })
 
-  // 5. Calcule l'elo_change et met à jour game_players + users
+  // 5. Calcule l'elo_change et met à jour game_players + users.
+  // Un joueur qui n'a RIEN soumis prend une pénalité fixe de -50 ELO.
   for (const player of players) {
-    const pts       = pointsMap[player.id]
-    const eloChange = maxPoints > 0 ? Math.round((pts / maxPoints) * (totalPlayers * 10)) : 0
+    const didSubmit = player.status === 'submitted'
+    const pts       = didSubmit ? pointsMap[player.id] : 0
+    const eloChange = didSubmit
+      ? (maxPoints > 0 ? Math.round((pts / maxPoints) * (totalPlayers * 10)) : 0)
+      : NO_SUBMISSION_PENALTY
 
     await supabase
       .from('game_players')
@@ -150,8 +164,9 @@ export async function POST(
   }
 
   // 6. Calcule les rangs avec gestion des ex-aequo
+  // Les non-soumetteurs sont toujours classés derniers (score plancher)
   const sorted = players
-    .map((p) => ({ ...p, pts: pointsMap[p.id] }))
+    .map((p) => ({ ...p, pts: p.status === 'submitted' ? pointsMap[p.id] : Number.NEGATIVE_INFINITY }))
     .sort((a, b) => b.pts - a.pts);
 
   let currentRank = 1;
