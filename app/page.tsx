@@ -132,28 +132,6 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ── 3 ETAPES ── */}
-      <section className="py-20 px-4">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-          {STEPS.map((step) => (
-            <Card key={step.number} className="flex flex-col gap-2">
-              <span
-                className="font-bangers leading-none text-[#ff2e2e]"
-                style={{ fontSize: "96px", lineHeight: 1 }}
-              >
-                {step.number}
-              </span>
-              <h3 className="font-archivo-black text-2xl uppercase text-[#1a1a1a] tracking-wide">
-                {step.title}
-              </h3>
-              <p className="font-archivo font-semibold text-[#1a1a1a]/75 text-base leading-relaxed">
-                {step.description}
-              </p>
-            </Card>
-          ))}
-        </div>
-      </section>
-
       {/* ── RESEAUX ── */}
       <section className="py-16 px-4">
         <div className="max-w-xl mx-auto text-center flex flex-col items-center gap-8">
@@ -179,6 +157,28 @@ export default async function Home() {
             ))}
             <ShareButton />
           </div>
+        </div>
+      </section>
+
+      {/* ── 3 ETAPES ── */}
+      <section className="py-20 px-4">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+          {STEPS.map((step) => (
+            <Card key={step.number} className="flex flex-col gap-2">
+              <span
+                className="font-bangers leading-none text-[#ff2e2e]"
+                style={{ fontSize: "96px", lineHeight: 1 }}
+              >
+                {step.number}
+              </span>
+              <h3 className="font-archivo-black text-2xl uppercase text-[#1a1a1a] tracking-wide">
+                {step.title}
+              </h3>
+              <p className="font-archivo font-semibold text-[#1a1a1a]/75 text-base leading-relaxed">
+                {step.description}
+              </p>
+            </Card>
+          ))}
         </div>
       </section>
 
