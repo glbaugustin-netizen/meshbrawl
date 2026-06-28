@@ -107,6 +107,7 @@ export default function ProfilPage() {
   const [editInstagram,  setEditInstagram]  = useState('');
   const [editTiktok,     setEditTiktok]     = useState('');
   const [editYoutube,    setEditYoutube]    = useState('');
+  const [editTwitch,     setEditTwitch]     = useState('');
 
   // Modals
   const [emailModal,    setEmailModal]    = useState(false);
@@ -171,6 +172,7 @@ export default function ProfilPage() {
     setEditInstagram(profile?.instagram || '');
     setEditTiktok(profile?.tiktok    || '');
     setEditYoutube(profile?.youtube  || '');
+    setEditTwitch(profile?.twitch    || '');
     setAlert(null);
     setEditing(true);
   };
@@ -190,6 +192,7 @@ export default function ProfilPage() {
         instagram:   editInstagram.trim(),
         tiktok:      editTiktok.trim(),
         youtube:     editYoutube.trim(),
+        twitch:      editTwitch.trim(),
       })
       .eq('id', profile.id);
 
@@ -306,6 +309,7 @@ export default function ProfilPage() {
   const instagram     = profile.instagram     || '';
   const tiktok        = profile.tiktok        || '';
   const youtube       = profile.youtube       || '';
+  const twitch        = profile.twitch        || '';
 
   const STATS = [
     { label: "PARTIES JOUEES",      value: String(partiesJouees),                       prefix: ""  },
@@ -313,7 +317,7 @@ export default function ProfilPage() {
     { label: "ELO ACTUEL",          value: String(elo),                                 prefix: ""  },
   ];
 
-  const hasSocials = instagram || tiktok || youtube;
+  const hasSocials = instagram || tiktok || youtube || twitch;
 
   return (
     <main className="min-h-[calc(100vh-64px)] px-4 py-12">
@@ -393,12 +397,14 @@ export default function ProfilPage() {
                 <EditField label="INSTAGRAM (sans @)" id="instagram" value={editInstagram} onChange={setEditInstagram} placeholder="tonpseudo" />
                 <EditField label="TIKTOK (sans @)"    id="tiktok"    value={editTiktok}    onChange={setEditTiktok}    placeholder="tonpseudo" />
                 <EditField label="YOUTUBE"            id="youtube"   value={editYoutube}   onChange={setEditYoutube}   placeholder="nom de chaîne" />
+                <EditField label="TWITCH (sans @)"    id="twitch"    value={editTwitch}    onChange={setEditTwitch}    placeholder="tonpseudo" />
               </div>
             ) : (
               <div className="flex flex-wrap gap-3">
                 {instagram && <SocialBtn icon={<IconInstagram />} label={`@${instagram}`} />}
                 {tiktok    && <SocialBtn icon={<IconTikTok />}    label={`@${tiktok}`} />}
                 {youtube   && <SocialBtn icon={<IconYouTube />}   label={youtube} />}
+                {twitch    && <SocialBtn icon={<IconTwitch />}    label={`@${twitch}`} color="#9146FF" />}
               </div>
             )}
           </div>
@@ -573,12 +579,12 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 // ─── Social button ────────────────────────────────────────────────────────────
 
-function SocialBtn({ icon, label }: { icon: React.ReactNode; label: string }) {
+function SocialBtn({ icon, label, color = "#2e6bff" }: { icon: React.ReactNode; label: string; color?: string }) {
   return (
     <button
       type="button"
       className="flex items-center gap-2 font-archivo-black text-white text-sm uppercase tracking-wide px-5 py-2.5 border-[4px] border-[#1a1a1a] transition-all duration-100 hover:-translate-y-[2px]"
-      style={{ backgroundColor: "#2e6bff", borderRadius: "12px", boxShadow: "4px 4px 0 #1a1a1a" }}
+      style={{ backgroundColor: color, borderRadius: "12px", boxShadow: "4px 4px 0 #1a1a1a" }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "4px 7px 0 #1a1a1a"; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "4px 4px 0 #1a1a1a"; }}
     >
@@ -612,6 +618,14 @@ function IconYouTube() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
+
+function IconTwitch() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z" />
     </svg>
   );
 }
