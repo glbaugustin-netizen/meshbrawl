@@ -39,7 +39,8 @@ function parseUtcMs(ts: string | null): number {
   return new Date(hasTz ? ts : ts + 'Z').getTime();
 }
 
-const MAX_GLB_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_GLB_BYTES   = 20 * 1024 * 1024;   // 20 MB
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;  // 100 MB (mode animation)
 
 // Compresse la géométrie d'un GLB avec meshopt (EXT_meshopt_compression) via
 // gltf-transform. Tourne entièrement dans le navigateur : le wasm meshoptimizer
@@ -222,6 +223,21 @@ function JeuPageInner() {
     setCompressInfo('');
     const isVideo = f.type.startsWith('video/');
     const isGLB   = f.name.toLowerCase().endsWith('.glb');
+
+    // Mode animation : vidéo uniquement (MP4 / WebM), 100 MB max
+    if (game?.mode === 'animation') {
+      if (!isVideo) {
+        setUploadError('Mode animation — vidéo uniquement (MP4 / WebM)');
+        return;
+      }
+      if (f.size > MAX_VIDEO_BYTES) {
+        setUploadError(`Vidéo trop lourde (${(f.size / 1024 / 1024).toFixed(0)} MB) — 100 MB max`);
+        return;
+      }
+      setFile(f);
+      return;
+    }
+
     if (!isVideo && !isGLB) {
       setUploadError('Fichier invalide — .glb ou vidéo uniquement');
       return;
@@ -388,6 +404,11 @@ function JeuPageInner() {
 
                 {/* Asset buttons */}
                 <AssetButtons game={game} />
+
+                {/* Carte ressource — mode animation */}
+                {game.mode === 'animation' && game.animation_asset && (
+                  <AnimationAssetCard game={game} />
+                )}
               </div>
             )}
 
@@ -463,7 +484,9 @@ function JeuPageInner() {
                         {isDragOver ? "LACHE TON FICHIER !" : "GLISSE TON FICHIER ICI"}
                       </p>
                       <p className="font-archivo text-xs text-center" style={{ color: "#b9a300", fontWeight: 500 }}>
-                        .glb ou vidéo • les .glb &gt; 20 MB sont compressés auto
+                        {game?.mode === 'animation'
+                          ? 'Vidéo MP4 / WebM • 100 MB max'
+                          : '.glb ou vidéo • les .glb > 20 MB sont compressés auto'}
                       </p>
                       <Button
                         variant="secondary"
@@ -486,7 +509,7 @@ function JeuPageInner() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".glb,video/*"
+                accept={game?.mode === 'animation' ? 'video/mp4,video/webm' : '.glb,video/*'}
                 className="hidden"
                 onChange={handleFileChange}
               />
@@ -698,20 +721,14 @@ function BriefContent({ game }: { game: Game }) {
   }
 
   if (mode === 'animation') {
-    const action = game.brief_action as string | undefined;
-    const style  = game.brief_style  as string | undefined;
-    const title  = action === 'LIBRE'
-      ? 'ANIME CE PERSONNAGE LIBREMENT'
-      : style
-      ? `ANIME EN STYLE ${style.toUpperCase()}`
-      : action
-      ? `ANIME CE PERSONNAGE QUI ${action.toUpperCase()}`
-      : 'ANIME CE PERSONNAGE';
-
+    const style = game.brief_style as string | undefined;
     return (
       <>
         <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none mb-4" style={{ fontSize: "36px" }}>
-          {title}
+          ANIME CET OBJET
+          {style && (
+            <> DANS LE STYLE <span className="text-[#2e6bff]">{style.toUpperCase()}</span></>
+          )}
         </p>
         <BriefBadge bg="#ffd400" color="#1a1a1a">ANIMATION</BriefBadge>
       </>
@@ -746,14 +763,13 @@ function AssetButtons({ game }: { game: Game }) {
     );
   }
 
-  if ((mode === 'texturing' || mode === 'animation') && game.asset_url) {
-    const label = mode === 'animation' ? 'TELECHARGER LE RIG' : 'TELECHARGER LE MESH';
+  if (mode === 'texturing' && game.asset_url) {
     return (
       <div className="flex items-center gap-4">
         <span className="font-archivo-black text-sm uppercase tracking-wide text-[#1a1a1a]">FICHIER DE BASE :</span>
         <a href={game.asset_url as string} download>
           <Button variant="secondary" className="!text-sm !px-5 !py-2 !rounded-[10px] !border-[3px] !shadow-[0_4px_0_#1a1a1a] hover:!shadow-[0_7px_0_#1a1a1a]">
-            {label}
+            TELECHARGER LE MESH
           </Button>
         </a>
       </div>
@@ -761,6 +777,47 @@ function AssetButtons({ game }: { game: Game }) {
   }
 
   return null;
+}
+
+// ─── Animation asset card ─────────────────────────────────────────────────────
+
+function AnimationAssetCard({ game }: { game: Game }) {
+  const asset = game.animation_asset as
+    | { asset_id: string; name: string; thumbnail: string; page: string }
+    | null;
+  if (!asset) return null;
+  const style = game.brief_style as string | undefined;
+
+  return (
+    <div
+      className="mt-4 bg-white border-[5px] border-[#1a1a1a] rounded-[16px] p-5 flex flex-col sm:flex-row items-center gap-5"
+      style={{ boxShadow: "6px 6px 0 #1a1a1a" }}
+    >
+      {asset.thumbnail && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={asset.thumbnail}
+          alt={asset.name}
+          className="rounded-[12px] border-[4px] border-[#1a1a1a] object-cover shrink-0"
+          style={{ width: 128, height: 128, boxShadow: "3px 3px 0 #1a1a1a", backgroundColor: "#f5f5f5" }}
+        />
+      )}
+      <div className="flex flex-col gap-3 items-center sm:items-start text-center sm:text-left">
+        <p className="font-archivo-black text-[#1a1a1a]/50 text-xs uppercase tracking-widest">
+          MODELE A ANIMER :
+        </p>
+        <p className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none" style={{ fontSize: "26px" }}>
+          {asset.name}
+        </p>
+        {style && <BriefBadge bg="#2e6bff" color="#fff">{style.toUpperCase()}</BriefBadge>}
+        <a href={asset.page} target="_blank" rel="noopener noreferrer">
+          <Button variant="secondary" className="!text-sm !px-5 !py-2 !rounded-[10px] !border-[3px] !shadow-[0_4px_0_#1a1a1a] hover:!shadow-[0_7px_0_#1a1a1a]">
+            VOIR LE MODELE
+          </Button>
+        </a>
+      </div>
+    </div>
+  );
 }
 
 // ─── Status pill ──────────────────────────────────────────────────────────────

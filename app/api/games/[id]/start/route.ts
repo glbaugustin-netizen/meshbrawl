@@ -43,15 +43,51 @@ const objetsImaginaire1j = [
   'Trompette', 'Piano', 'Robot', 'Drone', 'Ordinateur', 'Pont', 'Satellite',
 ]
 
-const actions = [
-  'marcher', 'courir', 'sauter', 'attaquer',
-  'danser', 'voler', 'nager', 'frapper', 'esquiver',
+// Mode animation — 8 styles d'animation imposés
+const ANIMATION_STYLES = [
+  'Film réaliste', 'Esthétique', 'Vieux film', 'Noir et blanc',
+  'Horreur', 'Publicité', 'Nature / Documentaire', 'Slow motion',
 ]
 
-const stylesAnim = [
-  'Cinématique', 'Cartoon', 'Réaliste',
-  'Slow motion', 'Loop parfaite', 'Manga / anime', 'Horror / creepy',
+// ─── Poly Haven (modèles 3D) ────────────────────────────────────────────────────
+
+type PolyHavenAsset = { asset_id: string; name: string; thumbnail: string; page: string }
+
+function polyHavenAsset(id: string, name: string): PolyHavenAsset {
+  return {
+    asset_id:  id,
+    name,
+    thumbnail: `https://cdn.polyhaven.com/asset_img/thumbs/${id}.png?width=512&height=512`,
+    page:      `https://polyhaven.com/a/${id}`,
+  }
+}
+
+// Assets de secours si l'API Poly Haven est indisponible (slugs réels)
+const POLYHAVEN_FALLBACK: PolyHavenAsset[] = [
+  polyHavenAsset('potted_plant_01', 'Potted Plant 01'),
+  polyHavenAsset('concrete_cat_statue', 'Concrete Cat Statue'),
+  polyHavenAsset('fire_extinguisher', 'Fire Extinguisher'),
+  polyHavenAsset('garden_gnome', 'Garden Gnome'),
+  polyHavenAsset('horse_statue_01', 'Horse Statue 01'),
+  polyHavenAsset('wooden_chair_02', 'Wooden Chair 02'),
+  polyHavenAsset('vintage_record_player', 'Vintage Record Player'),
 ]
+
+// Tire un modèle 3D aléatoire depuis l'API publique Poly Haven (serveur uniquement).
+// Fallback sur la liste en dur si l'API est down.
+async function getPolyHavenAsset(): Promise<PolyHavenAsset> {
+  try {
+    const res = await fetch('https://api.polyhaven.com/assets?type=models')
+    if (!res.ok) throw new Error('Poly Haven indisponible')
+    const data = (await res.json()) as Record<string, { name?: string }>
+    const keys = Object.keys(data)
+    if (keys.length === 0) throw new Error('Aucun asset')
+    const id = keys[Math.floor(Math.random() * keys.length)]
+    return polyHavenAsset(id, data[id]?.name ?? id)
+  } catch {
+    return random(POLYHAVEN_FALLBACK)
+  }
+}
 
 // Blueprints 5 heures — objets compacts (gadgets, armes, électronique)
 const blueprints5h = [
@@ -146,6 +182,7 @@ export async function POST(
 
   // Génère le brief selon le mode
   let brief: Record<string, string> = {}
+  let animationAsset: PolyHavenAsset | null = null
 
   if (game.mode === 'imaginaire') {
     // Objet selon la durée (le mode imaginaire bloque 5h et 1 semaine)
@@ -160,14 +197,8 @@ export async function POST(
   } else if (game.mode === 'texturing') {
     brief = { brief_style: random(styles) }
   } else if (game.mode === 'animation') {
-    const roll = Math.random()
-    if (roll < 0.33) {
-      brief = { brief_action: random(actions) }
-    } else if (roll < 0.66) {
-      brief = { brief_style: random(stylesAnim) }
-    } else {
-      brief = { brief_action: 'LIBRE' }
-    }
+    brief = { brief_style: random(ANIMATION_STYLES) }
+    animationAsset = await getPolyHavenAsset()
   } else if (game.mode === 'modelisation') {
     const pool = game.duration_seconds <= 18000 ? blueprints5h : blueprints1j
     brief = {
@@ -185,6 +216,7 @@ export async function POST(
       started_at: now.toISOString(),
       ends_at:    new Date(now.getTime() + game.duration_seconds * 1000).toISOString(),
       ...brief,
+      ...(animationAsset ? { animation_asset: animationAsset } : {}),
     })
     .eq('id', gameId)
 
