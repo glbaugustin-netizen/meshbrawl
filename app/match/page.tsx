@@ -76,6 +76,9 @@ export default function MatchPage() {
   const [selectedMode, setSelectedMode]         = useState<ModeId | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<DurationId | null>(null);
   const [searching, setSearching]               = useState(false);
+  const [animWarning, setAnimWarning]           = useState(false);
+  const [dontRemind, setDontRemind]             = useState(false);
+  const [pendingAnimMode, setPendingAnimMode]   = useState<ModeId | null>(null);
 
   const blockedDurations: DurationId[] = selectedMode
     ? (BLOCKED_DURATIONS[selectedMode] ?? [])
@@ -83,10 +86,32 @@ export default function MatchPage() {
 
   const handleModeSelect = (modeId: ModeId) => {
     const newMode = selectedMode === modeId ? null : modeId;
+
+    // Avertissement PC pour le mode animation (sauf si l'utilisateur a coché "ne plus afficher")
+    if (newMode === 'animation' && typeof window !== 'undefined' && !localStorage.getItem('anim_warning_dismissed')) {
+      setPendingAnimMode(newMode);
+      setDontRemind(false);
+      setAnimWarning(true);
+      return;
+    }
+
     setSelectedMode(newMode);
     if (newMode && selectedDuration && (BLOCKED_DURATIONS[newMode] ?? []).includes(selectedDuration)) {
       setSelectedDuration(null);
     }
+  };
+
+  const confirmAnimWarning = () => {
+    if (dontRemind && typeof window !== 'undefined') {
+      localStorage.setItem('anim_warning_dismissed', '1');
+    }
+    setAnimWarning(false);
+    const newMode = pendingAnimMode;
+    setSelectedMode(newMode);
+    if (newMode && selectedDuration && (BLOCKED_DURATIONS[newMode] ?? []).includes(selectedDuration)) {
+      setSelectedDuration(null);
+    }
+    setPendingAnimMode(null);
   };
 
   const canLaunch = selectedMode !== null && selectedDuration !== null;
@@ -319,6 +344,70 @@ export default function MatchPage() {
         </div>
 
       </div>
+
+      {/* ── Modal avertissement Animation ── */}
+      {animWarning && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ backgroundColor: "rgba(26,26,26,0.7)" }}
+        >
+          <div
+            className="w-full max-w-sm flex flex-col gap-5 p-6"
+            style={{ backgroundColor: "#fff", border: "5px solid #1a1a1a", borderRadius: "16px", boxShadow: "6px 6px 0 #ffd400" }}
+          >
+            {/* Icône + titre */}
+            <div className="flex items-center gap-3">
+              <span
+                className="shrink-0 w-10 h-10 flex items-center justify-center border-[3px] border-[#1a1a1a] rounded-[10px]"
+                style={{ backgroundColor: "#ffd400", boxShadow: "3px 3px 0 #1a1a1a" }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </span>
+              <h3 className="font-bangers uppercase tracking-widest text-[#1a1a1a] leading-none" style={{ fontSize: "24px" }}>
+                AVANT DE CONTINUER
+              </h3>
+            </div>
+
+            {/* Message */}
+            <p className="font-archivo text-[#1a1a1a] text-sm leading-relaxed" style={{ fontWeight: 700 }}>
+              Le mode Animation nécessite un PC suffisamment puissant pour créer et rendre votre animation dans les temps impartis.
+              Assurez-vous que votre machine est à la hauteur avant de lancer une partie !
+            </p>
+
+            {/* Case "ne plus afficher" */}
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div
+                onClick={() => setDontRemind((v) => !v)}
+                className="shrink-0 w-5 h-5 border-[3px] border-[#1a1a1a] flex items-center justify-center transition-colors duration-100"
+                style={{ borderRadius: "5px", backgroundColor: dontRemind ? "#1a1a1a" : "#fff", boxShadow: "2px 2px 0 #1a1a1a" }}
+              >
+                {dontRemind && (
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="2 6 5 9 10 3" />
+                  </svg>
+                )}
+              </div>
+              <span className="font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a]/70">
+                Ne plus me rappeler
+              </span>
+            </label>
+
+            {/* Bouton OK */}
+            <button
+              type="button"
+              onClick={confirmAnimWarning}
+              className="w-full font-bangers uppercase tracking-widest text-[#1a1a1a] bg-[#ffd400] border-[4px] border-[#1a1a1a] py-3 transition-all duration-100 hover:-translate-y-[2px]"
+              style={{ borderRadius: "12px", boxShadow: "0 6px 0 #1a1a1a", fontSize: "22px" }}
+            >
+              OK, COMPRIS !
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
