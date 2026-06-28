@@ -46,8 +46,13 @@ export default function NewsletterPanel({ isOpen, onClose, isAdmin, onNewsletter
     onNewsletter(list[0]?.created_at ?? null);
   };
 
+  // Charge au montage puis re-vérifie périodiquement → le badge non-lu
+  // s'allume automatiquement quand une nouvelle newsletter est publiée,
+  // sans que l'utilisateur ait à rafraîchir la page.
   useEffect(() => {
     load();
+    const interval = setInterval(load, 30000);
+    return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
