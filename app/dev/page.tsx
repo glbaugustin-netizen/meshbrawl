@@ -87,14 +87,22 @@ export default function DevPage() {
     return () => clearTimeout(t);
   }, [search, authed, fetchPlayers]);
 
-  // Auto-refresh toutes les 10s une fois authentifié (respecte la recherche)
+  // Auto-refresh toutes les 5 min une fois authentifié (respecte la recherche)
   useEffect(() => {
     if (!authed) return;
     const interval = setInterval(() => {
       fetchPlayers(pwRef.current, searchRef.current).catch(() => {});
-    }, 10_000);
+    }, 5 * 60_000);
     return () => clearInterval(interval);
   }, [authed, fetchPlayers]);
+
+  // Refresh manuel via le bouton
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchPlayers(pwRef.current, searchRef.current).catch(() => {});
+    setRefreshing(false);
+  };
 
   // Bannit / débannit le joueur ciblé par le modal de confirmation
   const confirmBan = async () => {
@@ -171,12 +179,33 @@ export default function DevPage() {
           <h1 className="font-bangers uppercase tracking-widest text-[#1a1a1a]" style={{ fontSize: "38px" }}>
             {search.trim() ? "RECHERCHE" : "JOUEURS EN LIGNE"}
           </h1>
-          <span
-            className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a] bg-[#ffd400] px-4 py-2"
-            style={{ border: "3px solid #1a1a1a", borderRadius: "10px", boxShadow: "3px 3px 0 #1a1a1a" }}
-          >
-            {players.length} {search.trim() ? "RÉSULTAT" + (players.length > 1 ? "S" : "") : "EN LIGNE"}
-          </span>
+          <div className="flex items-center gap-3">
+            <span
+              className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a] bg-[#ffd400] px-4 py-2"
+              style={{ border: "3px solid #1a1a1a", borderRadius: "10px", boxShadow: "3px 3px 0 #1a1a1a" }}
+            >
+              {players.length} {search.trim() ? "RÉSULTAT" + (players.length > 1 ? "S" : "") : "EN LIGNE"}
+            </span>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              aria-label="Rafraîchir"
+              className="flex items-center gap-2 font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a] bg-white px-4 py-2 transition-all duration-100 hover:-translate-y-[2px] disabled:opacity-50"
+              style={{ border: "3px solid #1a1a1a", borderRadius: "10px", boxShadow: "3px 3px 0 #1a1a1a" }}
+            >
+              <svg
+                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                className={refreshing ? "animate-spin" : undefined}
+              >
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+              {refreshing ? "..." : "REFRESH"}
+            </button>
+          </div>
         </div>
 
         {/* Barre de recherche — cherche par pseudo dans TOUS les joueurs */}
@@ -316,7 +345,7 @@ export default function DevPage() {
         )}
 
         <p className="font-archivo text-[10px] uppercase tracking-widest text-[#1a1a1a]/30 text-center">
-          Rafraîchissement auto toutes les 10s
+          Rafraîchissement auto toutes les 5 min — ou bouton REFRESH
         </p>
       </div>
 
