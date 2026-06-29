@@ -20,8 +20,6 @@ interface Player {
   banned:         boolean;
 }
 
-const SESSION_KEY = "dev_password";
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function ago(iso: string, now: number) {
@@ -71,7 +69,6 @@ export default function DevPage() {
     try {
       await fetchPlayers(pw, "");
       pwRef.current = pw;
-      sessionStorage.setItem(SESSION_KEY, pw);
       setAuthed(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur");
@@ -79,13 +76,6 @@ export default function DevPage() {
       setLoading(false);
     }
   };
-
-  // Tente une reconnexion auto si le mot de passe est déjà en session
-  useEffect(() => {
-    const saved = sessionStorage.getItem(SESSION_KEY);
-    if (saved) handleLogin(saved);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Recherche débouncée : relance la requête 350ms après la dernière frappe
   useEffect(() => {
