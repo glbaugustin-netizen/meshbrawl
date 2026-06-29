@@ -76,6 +76,7 @@ export default function MatchPage() {
   const [selectedMode, setSelectedMode]         = useState<ModeId | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<DurationId | null>(null);
   const [searching, setSearching]               = useState(false);
+  const [noElo, setNoElo]                       = useState(false);
   const [animWarning, setAnimWarning]           = useState(false);
   const [dontRemind, setDontRemind]             = useState(false);
   const [pendingAnimMode, setPendingAnimMode]   = useState<ModeId | null>(null);
@@ -134,6 +135,7 @@ export default function MatchPage() {
         body: JSON.stringify({
           mode:             selectedMode,
           duration_seconds: durationMap[dur.label],
+          ranked:           !noElo,
         }),
       });
       const { gameId, error } = await res.json();
@@ -324,6 +326,39 @@ export default function MatchPage() {
 
         {/* ── CTA ── */}
         <div className="flex flex-col items-center gap-3 pb-4">
+          {/* Partie amicale — sans ELO */}
+          <button
+            type="button"
+            onClick={() => setNoElo((v) => !v)}
+            className="flex items-center gap-3 bg-white px-5 py-3 transition-all duration-100 hover:-translate-y-[2px]"
+            style={{ border: "3px solid #1a1a1a", borderRadius: "12px", boxShadow: "3px 3px 0 #1a1a1a" }}
+          >
+            <span
+              className="flex items-center justify-center shrink-0 transition-colors duration-100"
+              style={{
+                width: "26px",
+                height: "26px",
+                borderRadius: "7px",
+                border: "3px solid #1a1a1a",
+                backgroundColor: noElo ? "#0aa36b" : "#fff",
+              }}
+            >
+              {noElo && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </span>
+            <span className="flex flex-col items-start leading-tight">
+              <span className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]">
+                Partie amicale
+              </span>
+              <span className="font-archivo text-[11px] text-[#1a1a1a]/55" style={{ fontWeight: 600 }}>
+                Aucun ELO en jeu — file séparée
+              </span>
+            </span>
+          </button>
+
           <Button
             variant="primary"
             disabled={!canLaunch || searching}

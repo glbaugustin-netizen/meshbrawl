@@ -20,7 +20,7 @@ export async function POST(
   // 1. Vérifie que la partie existe et n'est pas déjà calculée
   const { data: game } = await supabase
     .from('games')
-    .select('status, voting_started_at, ends_at')
+    .select('status, voting_started_at, ends_at, ranked')
     .eq('id', gameId)
     .single()
 
@@ -134,10 +134,15 @@ export async function POST(
 
   // 5. Calcule l'elo_change et met à jour game_players + users.
   // Un joueur qui n'a RIEN soumis prend une pénalité fixe de -50 ELO.
+  // Partie amicale (ranked=false) : aucun ELO en jeu → eloChange forcé à 0
+  // pour tout le monde (pas de gain, pas de pénalité de non-soumission).
+  const isRanked = game.ranked !== false
   for (const player of players) {
     const didSubmit = player.status === 'submitted'
     const pts       = didSubmit ? pointsMap[player.id] : 0
-    const eloChange = didSubmit
+    const eloChange = !isRanked
+      ? 0
+      : didSubmit
       ? (maxPoints > 0 ? Math.round((pts / maxPoints) * (totalPlayers * 10)) : 0)
       : NO_SUBMISSION_PENALTY
 

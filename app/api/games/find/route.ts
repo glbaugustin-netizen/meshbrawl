@@ -3,7 +3,10 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  const { mode, duration_seconds } = await request.json()
+  const { mode, duration_seconds, ranked: rankedRaw } = await request.json()
+  // Par défaut classé. Une partie amicale (ranked=false) a sa propre file :
+  // les joueurs "amicale" ne tombent qu'entre eux, et inversement.
+  const ranked = rankedRaw !== false
   const cookieStore = await cookies()
 
   const supabase = createServerClient(
@@ -68,13 +71,15 @@ export async function POST(request: Request) {
     }
   }
 
-  // Cherche une partie en attente avec le même mode et durée
+  // Cherche une partie en attente avec le même mode, durée ET type de file
+  // (classée / amicale) — pour ne jamais mélanger les deux files.
   const { data: existingGame } = await supabase
     .from('games')
     .select('id')
     .eq('status', 'waiting')
     .eq('mode', mode)
     .eq('duration_seconds', duration_seconds)
+    .eq('ranked', ranked)
     .limit(1)
     .single()
 
@@ -92,7 +97,7 @@ export async function POST(request: Request) {
     } else {
       const { data: newGame, error } = await supabase
         .from('games')
-        .insert({ mode, duration_seconds, status: 'waiting' })
+        .insert({ mode, duration_seconds, status: 'waiting', ranked })
         .select('id')
         .single()
       if (error || !newGame) return NextResponse.json({ error: error?.message }, { status: 500 })
@@ -101,7 +106,7 @@ export async function POST(request: Request) {
   } else {
     const { data: newGame, error } = await supabase
       .from('games')
-      .insert({ mode, duration_seconds, status: 'waiting' })
+      .insert({ mode, duration_seconds, status: 'waiting', ranked })
       .select('id')
       .single()
     if (error || !newGame) return NextResponse.json({ error: error?.message }, { status: 500 })
