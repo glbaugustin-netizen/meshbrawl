@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { compressGlb } from "@/lib/glb";
 import Button from "@/components/Button";
 import GameChat from "@/components/GameChat";
 
@@ -39,41 +40,9 @@ function parseUtcMs(ts: string | null): number {
   return new Date(hasTz ? ts : ts + 'Z').getTime();
 }
 
-const MAX_GLB_BYTES   = 20 * 1024 * 1024;   // 20 MB
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024;  // 100 MB (mode animation)
-
-// Compresse la géométrie d'un GLB avec meshopt (EXT_meshopt_compression) via
-// gltf-transform. Tourne entièrement dans le navigateur : le wasm meshoptimizer
-// est inliné (aucun fetch/fs externe), donc fiable dans le bundle. Les libs sont
-// importées dynamiquement pour ne pas alourdir le bundle initial.
-// NB : meshopt optimise la géométrie (vertices/faces), pas les textures embarquées.
-// <model-viewer> décode nativement EXT_meshopt_compression → le rendu reste OK.
-async function compressGlb(file: File): Promise<File> {
-  const [core, extensions, functions, meshoptimizer] = await Promise.all([
-    import('@gltf-transform/core'),
-    import('@gltf-transform/extensions'),
-    import('@gltf-transform/functions'),
-    import('meshoptimizer'),
-  ]);
-
-  const { MeshoptEncoder, MeshoptDecoder } = meshoptimizer;
-  await MeshoptEncoder.ready;
-  await MeshoptDecoder.ready;
-
-  const io = new core.WebIO()
-    .registerExtensions(extensions.ALL_EXTENSIONS)
-    .registerDependencies({
-      'meshopt.encoder': MeshoptEncoder,
-      'meshopt.decoder': MeshoptDecoder,
-    });
-
-  const input  = new Uint8Array(await file.arrayBuffer());
-  const doc    = await io.readBinary(input);
-  await doc.transform(functions.meshopt({ encoder: MeshoptEncoder }));
-  const output = await io.writeBinary(doc);
-
-  return new File([output as BlobPart], file.name, { type: 'model/gltf-binary' });
-}
+// Au-delà de ce seuil, on compresse le GLB côté navigateur avant l'upload.
+const GLB_COMPRESS_THRESHOLD = 5 * 1024 * 1024;  // 5 MB
+const MAX_VIDEO_BYTES        = 100 * 1024 * 1024; // 100 MB (mode animation)
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -243,8 +212,8 @@ function JeuPageInner() {
       return;
     }
 
-    // Compression auto des GLB > 20 MB (Draco, côté navigateur)
-    if (isGLB && f.size > MAX_GLB_BYTES) {
+    // Compression auto des GLB volumineux, côté navigateur (textures + meshopt)
+    if (isGLB && f.size > GLB_COMPRESS_THRESHOLD) {
       setCompressing(true);
       try {
         const compressed = await compressGlb(f);
@@ -441,7 +410,7 @@ function JeuPageInner() {
                     COMPRESSION EN COURS...
                   </p>
                   <p className="font-archivo text-xs text-center text-[#b9a300]" style={{ fontWeight: 600 }}>
-                    Fichier &gt; 20 MB — optimisation Draco, ça peut prendre quelques secondes
+                    Optimisation textures + géométrie, ça peut prendre quelques secondes
                   </p>
                 </div>
               ) : (
@@ -486,7 +455,7 @@ function JeuPageInner() {
                       <p className="font-archivo text-xs text-center" style={{ color: "#b9a300", fontWeight: 500 }}>
                         {game?.mode === 'animation'
                           ? 'Vidéo MP4 / WebM • 100 MB max'
-                          : '.glb ou vidéo • les .glb > 20 MB sont compressés auto'}
+                          : '.glb ou vidéo • les .glb lourds sont compressés auto'}
                       </p>
                       <Button
                         variant="secondary"
