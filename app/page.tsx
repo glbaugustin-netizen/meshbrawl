@@ -122,8 +122,8 @@ export default async function Home() {
               href="/tribunal"
               aria-label="Tribunal des bannis"
               title="Tribunal des bannis"
-              className="flex items-center justify-center bg-white text-[#1a1a1a] border-[4px] border-[#1a1a1a] rounded-[16px] sm:rounded-[20px] shadow-[0_8px_0_#1a1a1a] sm:shadow-[0_12px_0_#1a1a1a] hover:-translate-y-[4px] hover:shadow-[0_12px_0_#1a1a1a] sm:hover:shadow-[0_16px_0_#1a1a1a] active:shadow-[0_2px_0_#1a1a1a] transition-all duration-100 hover:bg-[#ffd400]"
-              style={{ width: "clamp(58px, 9vw, 90px)", aspectRatio: "1 / 1" }}
+              className="flex items-center justify-center self-stretch bg-[#ff2e2e] text-[#ffd400] border-[4px] border-[#1a1a1a] rounded-[16px] sm:rounded-[20px] shadow-[0_8px_0_#1a1a1a] sm:shadow-[0_12px_0_#1a1a1a] hover:-translate-y-[4px] hover:shadow-[0_12px_0_#1a1a1a] sm:hover:shadow-[0_16px_0_#1a1a1a] active:shadow-[0_2px_0_#1a1a1a] transition-all duration-100"
+              style={{ width: "clamp(58px, 9vw, 90px)" }}
             >
               <IconGavel />
             </Link>
