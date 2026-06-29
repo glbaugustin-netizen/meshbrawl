@@ -116,16 +116,29 @@ export default async function Home() {
           </h1>
 
           {/* CTA */}
-          <Link href="/match">
-            <Button
-              variant="primary"
-              className="!inline-flex items-center gap-3 sm:gap-4 !rounded-[16px] sm:!rounded-[20px] !shadow-[0_8px_0_#1a1a1a] sm:!shadow-[0_12px_0_#1a1a1a] hover:!-translate-y-[4px] hover:!shadow-[0_12px_0_#1a1a1a] sm:hover:!shadow-[0_16px_0_#1a1a1a] active:!shadow-[0_2px_0_#1a1a1a]"
-              style={{ fontSize: "clamp(28px, 5vw, 52px)", padding: "clamp(10px, 1.5vw, 18px) clamp(28px, 5vw, 56px)" }}
+          <div className="flex items-stretch gap-3 sm:gap-4">
+            {/* Tribunal des bannis */}
+            <Link
+              href="/tribunal"
+              aria-label="Tribunal des bannis"
+              title="Tribunal des bannis"
+              className="flex items-center justify-center bg-white text-[#1a1a1a] border-[4px] border-[#1a1a1a] rounded-[16px] sm:rounded-[20px] shadow-[0_8px_0_#1a1a1a] sm:shadow-[0_12px_0_#1a1a1a] hover:-translate-y-[4px] hover:shadow-[0_12px_0_#1a1a1a] sm:hover:shadow-[0_16px_0_#1a1a1a] active:shadow-[0_2px_0_#1a1a1a] transition-all duration-100 hover:bg-[#ffd400]"
+              style={{ width: "clamp(58px, 9vw, 90px)", aspectRatio: "1 / 1" }}
             >
-              JOUER
-              <IconArrowRight />
-            </Button>
-          </Link>
+              <IconGavel />
+            </Link>
+
+            <Link href="/match">
+              <Button
+                variant="primary"
+                className="!inline-flex items-center gap-3 sm:gap-4 !rounded-[16px] sm:!rounded-[20px] !shadow-[0_8px_0_#1a1a1a] sm:!shadow-[0_12px_0_#1a1a1a] hover:!-translate-y-[4px] hover:!shadow-[0_12px_0_#1a1a1a] sm:hover:!shadow-[0_16px_0_#1a1a1a] active:!shadow-[0_2px_0_#1a1a1a]"
+                style={{ fontSize: "clamp(28px, 5vw, 52px)", padding: "clamp(10px, 1.5vw, 18px) clamp(28px, 5vw, 56px)" }}
+              >
+                JOUER
+                <IconArrowRight />
+              </Button>
+            </Link>
+          </div>
 
           {/* Online counter */}
           <OnlineCounter initial={initialCount} />
@@ -221,6 +234,27 @@ function IconArrowRight() {
     >
       <line x1="5" y1="12" x2="19" y2="12" />
       <polyline points="12 5 19 12 12 19" />
+    </svg>
+  );
+}
+
+function IconGavel() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ width: "clamp(28px, 4.5vw, 44px)", height: "clamp(28px, 4.5vw, 44px)" }}
+    >
+      <path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8" />
+      <path d="m16 16 6-6" />
+      <path d="m8 8 6-6" />
+      <path d="m9 7 8 8" />
+      <path d="m21 11-8-8" />
     </svg>
   );
 }

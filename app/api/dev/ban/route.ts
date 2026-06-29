@@ -72,6 +72,10 @@ export async function POST(request: Request) {
     if (waitingIds.length) {
       await db.from('game_players').delete().eq('user_id', userId).in('game_id', waitingIds)
     }
+  } else {
+    // Déban → le dossier est clos : on nettoie sa demande et son cas au tribunal.
+    await db.from('unban_requests').delete().eq('user_id', userId)
+    await db.from('tribunal_cases').delete().eq('user_id', userId)
   }
 
   return NextResponse.json({ success: true, banned: !!banned })

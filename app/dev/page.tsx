@@ -170,6 +170,22 @@ export default function DevPage() {
     await fetchRequests().catch(() => {});
   };
 
+  // Envoie une demande au tribunal public des bannis
+  const sendToTribunal = async (req: UnbanRequest) => {
+    const res = await fetch("/api/dev/tribunal", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ password: pwRef.current, requestId: req.id }),
+      cache:   "no-store",
+    }).catch(() => null);
+    if (res && !res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Erreur");
+      return;
+    }
+    await fetchRequests().catch(() => {});
+  };
+
   // Débannit le joueur d'une demande puis supprime la demande
   const acceptRequest = async (req: UnbanRequest) => {
     await fetch("/api/dev/ban", {
@@ -486,11 +502,11 @@ export default function DevPage() {
                     </p>
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 flex-wrap">
                     <button
                       type="button"
                       onClick={() => acceptRequest(r)}
-                      className="flex-1 font-bangers uppercase tracking-widest text-white bg-[#0aa36b] border-[3px] border-[#1a1a1a] py-2 transition-all duration-100 hover:-translate-y-[2px]"
+                      className="flex-1 min-w-[110px] font-bangers uppercase tracking-widest text-white bg-[#0aa36b] border-[3px] border-[#1a1a1a] py-2 transition-all duration-100 hover:-translate-y-[2px]"
                       style={{ borderRadius: "10px", boxShadow: "0 4px 0 #1a1a1a", fontSize: "16px" }}
                     >
                       DÉBANNIR
@@ -498,12 +514,21 @@ export default function DevPage() {
                     <button
                       type="button"
                       onClick={() => dismissRequest(r.id)}
-                      className="flex-1 font-bangers uppercase tracking-widest text-[#1a1a1a] bg-white border-[3px] border-[#1a1a1a] py-2 transition-all duration-100 hover:-translate-y-[2px]"
+                      className="flex-1 min-w-[110px] font-bangers uppercase tracking-widest text-[#1a1a1a] bg-white border-[3px] border-[#1a1a1a] py-2 transition-all duration-100 hover:-translate-y-[2px]"
                       style={{ borderRadius: "10px", boxShadow: "0 4px 0 #1a1a1a", fontSize: "16px" }}
                     >
                       REJETER
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => sendToTribunal(r)}
+                    className="w-full font-bangers uppercase tracking-widest text-[#ffd400] bg-[#1a1a1a] border-[3px] border-[#1a1a1a] py-2 flex items-center justify-center gap-2 transition-all duration-100 hover:-translate-y-[2px]"
+                    style={{ borderRadius: "10px", boxShadow: "0 4px 0 #ff2e2e", fontSize: "16px" }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8"/><path d="m16 16 6-6"/><path d="m8 8 6-6"/><path d="m9 7 8 8"/><path d="m21 11-8-8"/></svg>
+                    PASSER AU TRIBUNAL
+                  </button>
                 </div>
               ))}
             </div>
