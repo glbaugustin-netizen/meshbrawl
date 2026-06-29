@@ -38,20 +38,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
   }
 
-  const { password } = await request.json().catch(() => ({ password: '' }))
+  const { password, search } = await request.json().catch(() => ({ password: '', search: '' }))
   if (password !== DEV_PASSWORD) {
     return NextResponse.json({ error: 'Mot de passe incorrect' }, { status: 401 })
   }
 
-  const db    = admin()
-  const since = new Date(Date.now() - ONLINE_WINDOW).toISOString()
+  const db        = admin()
+  const sinceMs   = Date.now() - ONLINE_WINDOW
+  const since     = new Date(sinceMs).toISOString()
+  const term      = (search ?? '').trim()
 
-  // Joueurs en ligne
-  const { data: players, error } = await db
+  // Mode recherche : on cherche par pseudo dans TOUS les joueurs (en ligne ou
+  // non). Sinon : liste des joueurs en ligne (last_seen < 5 min).
+  let query = db
     .from('users')
     .select('id, pseudo, avatar_color, elo, country, parties_jouees, last_seen, twitch')
-    .gte('last_seen', since)
-    .order('last_seen', { ascending: false })
+
+  if (term) {
+    query = query.ilike('pseudo', `%${term}%`).order('elo', { ascending: false }).limit(50)
+  } else {
+    query = query.gte('last_seen', since).order('last_seen', { ascending: false })
+  }
+
+  const { data: players, error } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -69,12 +78,14 @@ export async function POST(request: Request) {
 
   const enriched = (players ?? []).map((p) => ({
     ...p,
-    game: inGame.get(p.id) ?? null,
+    game:   inGame.get(p.id) ?? null,
+    online: p.last_seen ? new Date(p.last_seen).getTime() >= sinceMs : false,
   }))
 
   return NextResponse.json({
     serverNow: Date.now(),
     count:     enriched.length,
+    search:    term,
     players:   enriched,
   })
 }
