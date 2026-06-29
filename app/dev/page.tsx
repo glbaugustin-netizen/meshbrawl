@@ -18,6 +18,7 @@ interface Player {
   game:           { mode: string; status: string } | null;
   online:         boolean;
   banned:         boolean;
+  warns:          number;
 }
 
 interface UnbanRequest {
@@ -150,6 +151,26 @@ export default function DevPage() {
       }
     } finally {
       setBanning(false);
+    }
+  };
+
+  // Ajuste le nombre de warns d'un joueur (+1 / -1), avec maj optimiste
+  const warnPlayer = async (p: Player, delta: 1 | -1) => {
+    const next = Math.max(0, p.warns + delta);
+    setPlayers((prev) => prev.map((x) => (x.id === p.id ? { ...x, warns: next } : x)));
+    try {
+      const res = await fetch("/api/dev/warn", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ password: pwRef.current, userId: p.id, delta }),
+        cache:   "no-store",
+      });
+      if (!res.ok) {
+        // rollback si échec
+        setPlayers((prev) => prev.map((x) => (x.id === p.id ? { ...x, warns: p.warns } : x)));
+      }
+    } catch {
+      setPlayers((prev) => prev.map((x) => (x.id === p.id ? { ...x, warns: p.warns } : x)));
     }
   };
 
@@ -428,7 +449,7 @@ export default function DevPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#1a1a1a] text-[#ffd400]">
-                  {["PSEUDO", "ELO", "PAYS", "PARTIES", "STATUT", "VU IL Y A", "ACTION"].map((h) => (
+                  {["PSEUDO", "ELO", "PAYS", "PARTIES", "STATUT", "VU IL Y A", "WARNS", "ACTION"].map((h) => (
                     <th key={h} className="font-archivo-black text-[10px] uppercase tracking-widest px-4 py-3 whitespace-nowrap">
                       {h}
                     </th>
@@ -499,20 +520,54 @@ export default function DevPage() {
                       {ago(p.last_seen, serverNow)}
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => { setBanReason(""); setBanTarget(p); }}
-                        className="font-archivo-black text-[9px] uppercase tracking-widest px-3 py-1.5 transition-all duration-100 hover:-translate-y-[1px]"
+                      <span
+                        className="font-archivo-black text-sm inline-flex items-center justify-center min-w-[28px] px-2 py-0.5"
                         style={{
-                          border: "2px solid #1a1a1a",
                           borderRadius: "7px",
-                          boxShadow: "2px 2px 0 #1a1a1a",
-                          backgroundColor: p.banned ? "#0aa36b" : "#ff2e2e",
-                          color: "#fff",
+                          border: "2px solid #1a1a1a",
+                          backgroundColor: p.warns > 0 ? "#ffd400" : "#fff",
+                          color: "#1a1a1a",
                         }}
                       >
-                        {p.banned ? "DÉBANNIR" : "BANNIR"}
-                      </button>
+                        {p.warns}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => warnPlayer(p, -1)}
+                          disabled={p.warns === 0}
+                          aria-label="Retirer un warn"
+                          className="font-archivo-black text-sm flex items-center justify-center w-7 h-7 transition-all duration-100 hover:-translate-y-[1px] disabled:opacity-40 disabled:translate-y-0"
+                          style={{ border: "2px solid #1a1a1a", borderRadius: "7px", boxShadow: "2px 2px 0 #1a1a1a", backgroundColor: "#fff", color: "#1a1a1a" }}
+                        >
+                          −
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => warnPlayer(p, 1)}
+                          aria-label="Ajouter un warn"
+                          className="font-archivo-black text-sm flex items-center justify-center w-7 h-7 transition-all duration-100 hover:-translate-y-[1px]"
+                          style={{ border: "2px solid #1a1a1a", borderRadius: "7px", boxShadow: "2px 2px 0 #1a1a1a", backgroundColor: "#ffd400", color: "#1a1a1a" }}
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setBanReason(""); setBanTarget(p); }}
+                          className="font-archivo-black text-[9px] uppercase tracking-widest px-3 py-1.5 transition-all duration-100 hover:-translate-y-[1px]"
+                          style={{
+                            border: "2px solid #1a1a1a",
+                            borderRadius: "7px",
+                            boxShadow: "2px 2px 0 #1a1a1a",
+                            backgroundColor: p.banned ? "#0aa36b" : "#ff2e2e",
+                            color: "#fff",
+                          }}
+                        >
+                          {p.banned ? "DÉBANNIR" : "BANNIR"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
