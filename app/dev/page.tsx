@@ -41,6 +41,7 @@ export default function DevPage() {
   const [serverNow, setServerNow] = useState(Date.now());
   const [search,    setSearch]    = useState("");
   const [banTarget, setBanTarget] = useState<Player | null>(null);
+  const [banReason, setBanReason] = useState("");
   const [banning,   setBanning]   = useState(false);
   const pwRef       = useRef("");
   const searchRef   = useRef("");
@@ -116,6 +117,7 @@ export default function DevPage() {
           password: pwRef.current,
           userId:   banTarget.id,
           banned:   !banTarget.banned,
+          reason:   banReason,
         }),
         cache: "no-store",
       });
@@ -324,7 +326,7 @@ export default function DevPage() {
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => setBanTarget(p)}
+                        onClick={() => { setBanReason(""); setBanTarget(p); }}
                         className="font-archivo-black text-[9px] uppercase tracking-widest px-3 py-1.5 transition-all duration-100 hover:-translate-y-[1px]"
                         style={{
                           border: "2px solid #1a1a1a",
@@ -371,6 +373,24 @@ export default function DevPage() {
                 <><span className="font-archivo-black text-[#ff2e2e]">{banTarget.pseudo}</span> ne pourra plus rejoindre aucune partie.</>
               )}
             </p>
+            {!banTarget.banned && (
+              <div className="flex flex-col gap-1.5 text-left">
+                <label className="font-archivo-black text-[#1a1a1a] uppercase text-xs tracking-widest">
+                  Raison (visible par le joueur)
+                </label>
+                <textarea
+                  value={banReason}
+                  onChange={(e) => setBanReason(e.target.value)}
+                  rows={3}
+                  maxLength={300}
+                  placeholder="Ex: triche, comportement toxique..."
+                  className="w-full font-archivo bg-white text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 outline-none resize-none"
+                  style={{ fontWeight: 600, fontSize: "14px", padding: "11px 13px", border: "4px solid #1a1a1a", borderRadius: "10px", boxShadow: "3px 3px 0 #1a1a1a" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#ff2e2e"; e.currentTarget.style.boxShadow = "3px 3px 0 #ff2e2e"; }}
+                  onBlur={(e)  => { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.boxShadow = "3px 3px 0 #1a1a1a"; }}
+                />
+              </div>
+            )}
             <div className="flex gap-3">
               <button
                 type="button"

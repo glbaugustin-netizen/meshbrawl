@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
   }
 
-  const { password, userId, banned } = await request.json().catch(() => ({}))
+  const { password, userId, banned, reason } = await request.json().catch(() => ({}))
   if (password !== DEV_PASSWORD) {
     return NextResponse.json({ error: 'Mot de passe incorrect' }, { status: 401 })
   }
@@ -50,7 +50,11 @@ export async function POST(request: Request) {
 
   const { error } = await db
     .from('users')
-    .update({ banned: !!banned })
+    .update({
+      banned:     !!banned,
+      // On enregistre la raison au ban, on la vide au déban.
+      ban_reason: banned ? (typeof reason === 'string' ? reason.trim() : null) : null,
+    })
     .eq('id', userId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

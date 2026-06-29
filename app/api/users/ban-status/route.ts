@@ -2,7 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-export async function POST() {
+export const dynamic = "force-dynamic";
+
+// Renvoie le statut de ban + la raison pour l'utilisateur connecté.
+export async function GET() {
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,14 +14,16 @@ export async function POST() {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ ok: false });
+  if (!user) return NextResponse.json({ banned: false });
 
-  const { data: updated } = await supabase
+  const { data } = await supabase
     .from("users")
-    .update({ last_seen: new Date().toISOString() })
+    .select("banned, ban_reason")
     .eq("id", user.id)
-    .select("banned")
     .single();
 
-  return NextResponse.json({ ok: true, banned: !!updated?.banned });
+  return NextResponse.json({
+    banned: !!data?.banned,
+    reason: data?.ban_reason ?? null,
+  });
 }
