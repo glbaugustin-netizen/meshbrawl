@@ -11,6 +11,12 @@ export default function BanniPage() {
   const [loading, setLoading] = useState(true);
   const [reason,  setReason]  = useState<string | null>(null);
 
+  // Demande de déban
+  const [message,   setMessage]   = useState("");
+  const [sending,   setSending]   = useState(false);
+  const [sent,      setSent]      = useState(false);
+  const [reqError,  setReqError]  = useState("");
+
   useEffect(() => {
     (async () => {
       try {
@@ -19,6 +25,14 @@ export default function BanniPage() {
         // Pas banni → on n'a rien à faire ici
         if (!data.banned) { router.replace("/"); return; }
         setReason(data.reason ?? null);
+
+        // Pré-remplit si une demande existe déjà
+        const reqRes  = await fetch("/api/unban-requests", { cache: "no-store" });
+        const reqData = await reqRes.json();
+        if (reqData.exists) {
+          setMessage(reqData.message ?? "");
+          setSent(true);
+        }
       } catch {
         // En cas d'erreur on reste sur la page de ban (fail-safe)
       } finally {
@@ -26,6 +40,24 @@ export default function BanniPage() {
       }
     })();
   }, [router]);
+
+  const handleSubmit = async () => {
+    if (!message.trim()) return;
+    setSending(true);
+    setReqError("");
+    try {
+      const res = await fetch("/api/unban-requests", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ message }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setReqError(data.error ?? "Erreur"); return; }
+      setSent(true);
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -77,20 +109,47 @@ export default function BanniPage() {
           </p>
         </div>
 
-        <p className="font-archivo text-xs text-[#1a1a1a]/50 leading-relaxed" style={{ fontWeight: 600 }}>
-          Tu penses que c&apos;est une erreur ? Contacte-nous à{" "}
-          <a href="mailto:glbaugustin@gmail.com?subject=Contestation%20de%20ban%20MeshBrawl" className="underline text-[#2e6bff]">
-            glbaugustin@gmail.com
-          </a>
-        </p>
+        {/* Demande de déban */}
+        <div className="flex flex-col gap-3 text-left">
+          <label className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a]">
+            Faire une demande de déban — explique-toi
+          </label>
+          <textarea
+            value={message}
+            onChange={(e) => { setMessage(e.target.value); setSent(false); }}
+            rows={4}
+            maxLength={500}
+            placeholder="Explique pourquoi ton compte devrait être débanni..."
+            className="w-full font-archivo bg-white text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 outline-none resize-none"
+            style={{ fontWeight: 600, fontSize: "14px", padding: "12px 14px", border: "4px solid #1a1a1a", borderRadius: "11px", boxShadow: "3px 3px 0 #1a1a1a" }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "#2e6bff"; e.currentTarget.style.boxShadow = "3px 3px 0 #2e6bff"; }}
+            onBlur={(e)  => { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.boxShadow = "3px 3px 0 #1a1a1a"; }}
+          />
+          {reqError && (
+            <p className="font-archivo-black text-xs uppercase tracking-widest text-[#ff2e2e]">{reqError}</p>
+          )}
+          {sent && !reqError && (
+            <p className="font-archivo-black text-xs uppercase tracking-widest text-[#0aa36b]">
+              ✓ Demande envoyée — un admin va l&apos;examiner
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={sending || !message.trim()}
+            className="w-full font-bangers uppercase tracking-widest text-[#1a1a1a] bg-[#ffd400] border-[4px] border-[#1a1a1a] py-3 transition-all duration-100 hover:-translate-y-[2px] disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0"
+            style={{ borderRadius: "12px", boxShadow: "0 5px 0 #1a1a1a", fontSize: "18px" }}
+          >
+            {sending ? "ENVOI..." : sent ? "METTRE À JOUR MA DEMANDE" : "ENVOYER MA DEMANDE"}
+          </button>
+        </div>
 
         <button
           type="button"
           onClick={handleLogout}
-          className="w-full font-bangers uppercase tracking-widest text-[#1a1a1a] bg-[#ffd400] border-[4px] border-[#1a1a1a] py-3 transition-all duration-100 hover:-translate-y-[2px]"
-          style={{ borderRadius: "12px", boxShadow: "0 5px 0 #1a1a1a", fontSize: "18px" }}
+          className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 underline underline-offset-2 hover:text-[#ff2e2e] transition-colors self-center"
         >
-          SE DÉCONNECTER
+          Se déconnecter
         </button>
       </div>
     </main>

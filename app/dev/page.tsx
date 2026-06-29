@@ -20,6 +20,17 @@ interface Player {
   banned:         boolean;
 }
 
+interface UnbanRequest {
+  id:          string;
+  userId:      string;
+  message:     string;
+  createdAt:   string;
+  pseudo:      string;
+  avatarColor: string | null;
+  banned:      boolean;
+  banReason:   string | null;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function ago(iso: string, now: number) {
@@ -43,6 +54,8 @@ export default function DevPage() {
   const [banTarget, setBanTarget] = useState<Player | null>(null);
   const [banReason, setBanReason] = useState("");
   const [banning,   setBanning]   = useState(false);
+  const [tab,       setTab]       = useState<"players" | "requests">("players");
+  const [requests,  setRequests]  = useState<UnbanRequest[]>([]);
   const pwRef       = useRef("");
   const searchRef   = useRef("");
 
@@ -133,6 +146,46 @@ export default function DevPage() {
     }
   };
 
+  // ── Demandes de déban ──
+  const fetchRequests = useCallback(async () => {
+    const res = await fetch("/api/dev/unban-requests", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ password: pwRef.current }),
+      cache:   "no-store",
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    setRequests(data.requests ?? []);
+  }, []);
+
+  // Charge les demandes quand on ouvre l'onglet
+  useEffect(() => {
+    if (authed && tab === "requests") fetchRequests().catch(() => {});
+  }, [authed, tab, fetchRequests]);
+
+  // Supprime une demande (sans débannir)
+  const dismissRequest = async (id: string) => {
+    await fetch("/api/dev/unban-requests", {
+      method:  "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ password: pwRef.current, id }),
+      cache:   "no-store",
+    }).catch(() => {});
+    await fetchRequests().catch(() => {});
+  };
+
+  // Débannit le joueur d'une demande puis supprime la demande
+  const acceptRequest = async (req: UnbanRequest) => {
+    await fetch("/api/dev/ban", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ password: pwRef.current, userId: req.userId, banned: false }),
+      cache:   "no-store",
+    }).catch(() => {});
+    await dismissRequest(req.id);
+  };
+
   // ── Écran mot de passe ──
   if (!authed) {
     return (
@@ -179,18 +232,25 @@ export default function DevPage() {
       <div className="max-w-5xl mx-auto flex flex-col gap-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="font-bangers uppercase tracking-widest text-[#1a1a1a]" style={{ fontSize: "38px" }}>
-            {search.trim() ? "RECHERCHE" : "JOUEURS EN LIGNE"}
+            {tab === "requests" ? "DEMANDES DE DÉBAN" : search.trim() ? "RECHERCHE" : "JOUEURS EN LIGNE"}
           </h1>
           <div className="flex items-center gap-3">
             <span
               className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a] bg-[#ffd400] px-4 py-2"
               style={{ border: "3px solid #1a1a1a", borderRadius: "10px", boxShadow: "3px 3px 0 #1a1a1a" }}
             >
-              {players.length} {search.trim() ? "RÉSULTAT" + (players.length > 1 ? "S" : "") : "EN LIGNE"}
+              {tab === "requests"
+                ? `${requests.length} DEMANDE${requests.length > 1 ? "S" : ""}`
+                : `${players.length} ${search.trim() ? "RÉSULTAT" + (players.length > 1 ? "S" : "") : "EN LIGNE"}`}
             </span>
             <button
               type="button"
-              onClick={handleRefresh}
+              onClick={async () => {
+                setRefreshing(true);
+                if (tab === "requests") await fetchRequests().catch(() => {});
+                else await fetchPlayers(pwRef.current, searchRef.current).catch(() => {});
+                setRefreshing(false);
+              }}
               disabled={refreshing}
               aria-label="Rafraîchir"
               className="flex items-center gap-2 font-archivo-black text-xs uppercase tracking-widest text-[#1a1a1a] bg-white px-4 py-2 transition-all duration-100 hover:-translate-y-[2px] disabled:opacity-50"
@@ -210,6 +270,32 @@ export default function DevPage() {
           </div>
         </div>
 
+        {/* Onglets */}
+        <div className="flex gap-3">
+          {([
+            ["players",  "JOUEURS"],
+            ["requests", `DEMANDES${requests.length ? ` (${requests.length})` : ""}`],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className="font-bangers uppercase tracking-widest border-[3px] border-[#1a1a1a] px-5 py-2 transition-all duration-100 hover:-translate-y-[2px]"
+              style={{
+                borderRadius: "10px",
+                fontSize: "18px",
+                boxShadow: "0 4px 0 #1a1a1a",
+                backgroundColor: tab === key ? "#1a1a1a" : "#fff",
+                color: tab === key ? "#ffd400" : "#1a1a1a",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "players" && (
+        <>
         {/* Barre de recherche — cherche par pseudo dans TOUS les joueurs */}
         <div className="relative">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#1a1a1a]/40 pointer-events-none">
@@ -344,6 +430,89 @@ export default function DevPage() {
               </tbody>
             </table>
           </div>
+        )}
+        </>
+        )}
+
+        {tab === "requests" && (
+          requests.length === 0 ? (
+            <div
+              className="text-center py-20 bg-white"
+              style={{ border: "4px solid #1a1a1a", borderRadius: "14px", boxShadow: "4px 4px 0 #1a1a1a" }}
+            >
+              <p className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]/40">
+                Aucune demande de déban
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {requests.map((r) => (
+                <div
+                  key={r.id}
+                  className="bg-white p-5 flex flex-col gap-3"
+                  style={{ border: "4px solid #1a1a1a", borderRadius: "14px", boxShadow: "4px 4px 0 #1a1a1a" }}
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="w-8 h-8 rounded-full shrink-0"
+                        style={{ backgroundColor: r.avatarColor ?? "#ccc", border: "2px solid #1a1a1a" }}
+                      />
+                      <div className="flex flex-col">
+                        <span className="font-archivo-black text-sm text-[#1a1a1a]">{r.pseudo}</span>
+                        <span className="font-archivo text-[10px] uppercase tracking-widest text-[#1a1a1a]/40" style={{ fontWeight: 700 }}>
+                          {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    </div>
+                    {!r.banned && (
+                      <span
+                        className="font-archivo-black text-[9px] uppercase tracking-widest text-[#0aa36b] bg-[#0aa36b]/10 px-2 py-1"
+                        style={{ borderRadius: "6px" }}
+                      >
+                        DÉJÀ DÉBANNI
+                      </span>
+                    )}
+                  </div>
+
+                  {r.banReason && (
+                    <p className="font-archivo text-xs text-[#1a1a1a]/60" style={{ fontWeight: 600 }}>
+                      <span className="font-archivo-black uppercase tracking-widest text-[10px] text-[#ff2e2e]">Banni pour : </span>
+                      {r.banReason}
+                    </p>
+                  )}
+
+                  <div
+                    className="p-4"
+                    style={{ backgroundColor: "#f7f7f7", border: "2px solid #1a1a1a", borderRadius: "10px" }}
+                  >
+                    <p className="font-archivo text-sm text-[#1a1a1a] leading-relaxed whitespace-pre-wrap" style={{ fontWeight: 600 }}>
+                      {r.message}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => acceptRequest(r)}
+                      className="flex-1 font-bangers uppercase tracking-widest text-white bg-[#0aa36b] border-[3px] border-[#1a1a1a] py-2 transition-all duration-100 hover:-translate-y-[2px]"
+                      style={{ borderRadius: "10px", boxShadow: "0 4px 0 #1a1a1a", fontSize: "16px" }}
+                    >
+                      DÉBANNIR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => dismissRequest(r.id)}
+                      className="flex-1 font-bangers uppercase tracking-widest text-[#1a1a1a] bg-white border-[3px] border-[#1a1a1a] py-2 transition-all duration-100 hover:-translate-y-[2px]"
+                      style={{ borderRadius: "10px", boxShadow: "0 4px 0 #1a1a1a", fontSize: "16px" }}
+                    >
+                      REJETER
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         )}
 
         <p className="font-archivo text-[10px] uppercase tracking-widest text-[#1a1a1a]/30 text-center">
