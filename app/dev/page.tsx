@@ -110,13 +110,8 @@ export default function DevPage() {
     return () => clearInterval(interval);
   }, [authed, fetchPlayers]);
 
-  // Refresh manuel via le bouton
+  // Refresh manuel via le bouton (l'action est définie inline selon l'onglet)
   const [refreshing, setRefreshing] = useState(false);
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchPlayers(pwRef.current, searchRef.current).catch(() => {});
-    setRefreshing(false);
-  };
 
   // Bannit / débannit le joueur ciblé par le modal de confirmation
   const confirmBan = async () => {
