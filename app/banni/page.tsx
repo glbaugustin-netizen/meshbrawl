@@ -112,7 +112,7 @@ export default function BanniPage() {
         {/* Demande de déban */}
         <div className="flex flex-col gap-3 text-left">
           <label className="font-archivo-black text-[10px] uppercase tracking-widest text-[#1a1a1a]">
-            Faire une demande de déban — explique-toi
+            Faire une demande de déban
           </label>
           <textarea
             value={message}
