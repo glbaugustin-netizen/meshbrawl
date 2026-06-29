@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ interface Case {
 }
 
 export default function TribunalPage() {
+  const router = useRouter();
   const [loading,  setLoading]  = useState(true);
   const [authed,   setAuthed]   = useState(false);
   const [isAdmin,  setIsAdmin]  = useState(false);
@@ -32,10 +34,12 @@ export default function TribunalPage() {
   const load = useCallback(async () => {
     const res = await fetch("/api/tribunal", { cache: "no-store" });
     if (res.status === 401) { setAuthed(false); return; }
+    // Tribunal désactivé côté dev → page inaccessible, retour à l'accueil
+    if (res.status === 403) { router.replace("/"); return; }
     setAuthed(true);
     const data = await res.json();
     setCases(data.cases ?? []);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     (async () => {

@@ -45,6 +45,7 @@ const SOCIALS: { name: string; href: string; icon: React.ReactNode }[] = [
 
 export default async function Home() {
   let initialCount = 0;
+  let tribunalEnabled = false;
   try {
     const supabase = await createClient();
     const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
@@ -53,6 +54,13 @@ export default async function Home() {
       .select("*", { count: "exact", head: true })
       .gte("last_seen", since);
     initialCount = count ?? 0;
+
+    const { data: flag } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "tribunal_enabled")
+      .maybeSingle();
+    tribunalEnabled = !!flag?.value;
   } catch (e) {
     console.error("Online count error:", e);
   }
@@ -116,17 +124,19 @@ export default async function Home() {
           </h1>
 
           {/* CTA */}
-          <div className="flex items-stretch gap-3 sm:gap-4">
-            {/* Tribunal des bannis */}
-            <Link
-              href="/tribunal"
-              aria-label="Tribunal des bannis"
-              title="Tribunal des bannis"
-              className="flex items-center justify-center self-stretch bg-[#ff2e2e] text-[#ffd400] border-[4px] border-[#1a1a1a] rounded-[16px] sm:rounded-[20px] shadow-[0_8px_0_#1a1a1a] sm:shadow-[0_12px_0_#1a1a1a] hover:-translate-y-[4px] hover:shadow-[0_12px_0_#1a1a1a] sm:hover:shadow-[0_16px_0_#1a1a1a] active:shadow-[0_2px_0_#1a1a1a] transition-all duration-100"
-              style={{ width: "clamp(58px, 9vw, 90px)" }}
-            >
-              <IconGavel />
-            </Link>
+          <div className="flex items-stretch justify-center gap-3 sm:gap-4">
+            {/* Tribunal des bannis (affiché seulement si activé côté dev) */}
+            {tribunalEnabled && (
+              <Link
+                href="/tribunal"
+                aria-label="Tribunal des bannis"
+                title="Tribunal des bannis"
+                className="flex items-center justify-center self-stretch bg-[#ff2e2e] text-[#ffd400] border-[4px] border-[#1a1a1a] rounded-[16px] sm:rounded-[20px] shadow-[0_8px_0_#1a1a1a] sm:shadow-[0_12px_0_#1a1a1a] hover:-translate-y-[4px] hover:shadow-[0_12px_0_#1a1a1a] sm:hover:shadow-[0_16px_0_#1a1a1a] active:shadow-[0_2px_0_#1a1a1a] transition-all duration-100"
+                style={{ width: "clamp(58px, 9vw, 90px)" }}
+              >
+                <IconGavel />
+              </Link>
+            )}
 
             <Link href="/match">
               <Button

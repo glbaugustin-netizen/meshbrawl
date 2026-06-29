@@ -56,6 +56,8 @@ export default function DevPage() {
   const [banning,   setBanning]   = useState(false);
   const [tab,       setTab]       = useState<"players" | "requests">("players");
   const [requests,  setRequests]  = useState<UnbanRequest[]>([]);
+  const [tribunalOn, setTribunalOn] = useState(false);
+  const [savingFlag, setSavingFlag] = useState(false);
   const pwRef       = useRef("");
   const searchRef   = useRef("");
 
@@ -84,6 +86,16 @@ export default function DevPage() {
       await fetchPlayers(pw, "");
       pwRef.current = pw;
       setAuthed(true);
+      // Charge les réglages (flag tribunal)
+      fetch("/api/dev/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw }),
+        cache: "no-store",
+      })
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => { if (d) setTribunalOn(!!d.tribunalEnabled); })
+        .catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur");
     } finally {
@@ -138,6 +150,26 @@ export default function DevPage() {
       }
     } finally {
       setBanning(false);
+    }
+  };
+
+  // ── Réglage : active/désactive le tribunal ──
+  const toggleTribunal = async () => {
+    const next = !tribunalOn;
+    setSavingFlag(true);
+    setTribunalOn(next); // optimiste
+    try {
+      const res = await fetch("/api/dev/settings", {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ password: pwRef.current, tribunalEnabled: next }),
+        cache:   "no-store",
+      });
+      if (!res.ok) { setTribunalOn(!next); } // rollback si échec
+    } catch {
+      setTribunalOn(!next);
+    } finally {
+      setSavingFlag(false);
     }
   };
 
@@ -303,6 +335,52 @@ export default function DevPage() {
               {label}
             </button>
           ))}
+        </div>
+
+        {/* Réglage global : tribunal des bannis */}
+        <div
+          className="flex items-center justify-between gap-3 bg-white px-5 py-4"
+          style={{ border: "4px solid #1a1a1a", borderRadius: "14px", boxShadow: "4px 4px 0 #1a1a1a" }}
+        >
+          <div className="flex items-center gap-3">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8"/><path d="m16 16 6-6"/><path d="m8 8 6-6"/><path d="m9 7 8 8"/><path d="m21 11-8-8"/></svg>
+            <div className="flex flex-col">
+              <span className="font-archivo-black text-sm uppercase tracking-widest text-[#1a1a1a]">
+                Tribunal des bannis
+              </span>
+              <span className="font-archivo text-[11px] text-[#1a1a1a]/50" style={{ fontWeight: 600 }}>
+                {tribunalOn ? "Visible et accessible à tous" : "Masqué — page inaccessible"}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={toggleTribunal}
+            disabled={savingFlag}
+            role="switch"
+            aria-checked={tribunalOn}
+            aria-label="Activer le tribunal"
+            className="relative shrink-0 transition-all duration-150 disabled:opacity-60"
+            style={{
+              width: "62px",
+              height: "34px",
+              borderRadius: "999px",
+              border: "3px solid #1a1a1a",
+              backgroundColor: tribunalOn ? "#0aa36b" : "#e5e5e5",
+            }}
+          >
+            <span
+              className="absolute top-1/2 -translate-y-1/2 transition-all duration-150"
+              style={{
+                left: tribunalOn ? "30px" : "3px",
+                width: "22px",
+                height: "22px",
+                borderRadius: "999px",
+                backgroundColor: "#fff",
+                border: "2px solid #1a1a1a",
+              }}
+            />
+          </button>
         </div>
 
         {tab === "players" && (

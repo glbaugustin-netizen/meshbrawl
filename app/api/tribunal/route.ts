@@ -21,10 +21,24 @@ async function getUser() {
   return user;
 }
 
+// Le tribunal n'est accessible que si le flag est activé côté dev.
+async function tribunalEnabled(): Promise<boolean> {
+  const { data } = await admin()
+    .from("app_settings")
+    .select("value")
+    .eq("key", "tribunal_enabled")
+    .maybeSingle();
+  return !!data?.value;
+}
+
 // ─── GET — liste les cas avec décompte des votes + mon vote ───────────────────
 export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
+
+  if (!(await tribunalEnabled())) {
+    return NextResponse.json({ error: "Tribunal fermé", disabled: true }, { status: 403 });
+  }
 
   const db = admin();
 
@@ -77,6 +91,10 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
+
+  if (!(await tribunalEnabled())) {
+    return NextResponse.json({ error: "Tribunal fermé" }, { status: 403 });
+  }
 
   const { caseId, vote } = await request.json().catch(() => ({}));
   if (!caseId || (vote !== "ban" && vote !== "deban")) {
