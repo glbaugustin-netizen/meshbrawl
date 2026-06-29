@@ -137,7 +137,11 @@ export default function MatchPage() {
         }),
       });
       const { gameId, error } = await res.json();
-      if (error || !gameId) { setSearching(false); return; }
+      if (error || !gameId) {
+        if (res.status === 403) alert("Ton compte a été banni. Tu ne peux plus rejoindre de partie.");
+        setSearching(false);
+        return;
+      }
       router.push(`/attente?gameId=${gameId}`);
     } catch {
       setSearching(false);

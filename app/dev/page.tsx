@@ -17,6 +17,7 @@ interface Player {
   twitch:         string | null;
   game:           { mode: string; status: string } | null;
   online:         boolean;
+  banned:         boolean;
 }
 
 const SESSION_KEY = "dev_password";
@@ -41,6 +42,8 @@ export default function DevPage() {
   const [players,   setPlayers]   = useState<Player[]>([]);
   const [serverNow, setServerNow] = useState(Date.now());
   const [search,    setSearch]    = useState("");
+  const [banTarget, setBanTarget] = useState<Player | null>(null);
+  const [banning,   setBanning]   = useState(false);
   const pwRef       = useRef("");
   const searchRef   = useRef("");
 
@@ -102,6 +105,33 @@ export default function DevPage() {
     }, 10_000);
     return () => clearInterval(interval);
   }, [authed, fetchPlayers]);
+
+  // Bannit / débannit le joueur ciblé par le modal de confirmation
+  const confirmBan = async () => {
+    if (!banTarget) return;
+    setBanning(true);
+    try {
+      const res = await fetch("/api/dev/ban", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          password: pwRef.current,
+          userId:   banTarget.id,
+          banned:   !banTarget.banned,
+        }),
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error ?? "Erreur");
+      } else {
+        await fetchPlayers(pwRef.current, searchRef.current).catch(() => {});
+        setBanTarget(null);
+      }
+    } finally {
+      setBanning(false);
+    }
+  };
 
   // ── Écran mot de passe ──
   if (!authed) {
@@ -202,7 +232,7 @@ export default function DevPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#1a1a1a] text-[#ffd400]">
-                  {["PSEUDO", "ELO", "PAYS", "PARTIES", "STATUT", "VU IL Y A"].map((h) => (
+                  {["PSEUDO", "ELO", "PAYS", "PARTIES", "STATUT", "VU IL Y A", "ACTION"].map((h) => (
                     <th key={h} className="font-archivo-black text-[10px] uppercase tracking-widest px-4 py-3 whitespace-nowrap">
                       {h}
                     </th>
@@ -246,7 +276,14 @@ export default function DevPage() {
                       {p.parties_jouees}
                     </td>
                     <td className="px-4 py-3">
-                      {p.game ? (
+                      {p.banned ? (
+                        <span
+                          className="font-archivo-black text-[9px] uppercase tracking-widest text-white bg-[#1a1a1a] px-2 py-1 inline-block"
+                          style={{ borderRadius: "6px" }}
+                        >
+                          BANNI
+                        </span>
+                      ) : p.game ? (
                         <span
                           className="font-archivo-black text-[9px] uppercase tracking-widest text-white bg-[#ff2e2e] px-2 py-1 inline-block"
                           style={{ borderRadius: "6px" }}
@@ -265,6 +302,22 @@ export default function DevPage() {
                     <td className="px-4 py-3 font-archivo text-xs text-[#1a1a1a]/50" style={{ fontWeight: 600 }}>
                       {ago(p.last_seen, serverNow)}
                     </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setBanTarget(p)}
+                        className="font-archivo-black text-[9px] uppercase tracking-widest px-3 py-1.5 transition-all duration-100 hover:-translate-y-[1px]"
+                        style={{
+                          border: "2px solid #1a1a1a",
+                          borderRadius: "7px",
+                          boxShadow: "2px 2px 0 #1a1a1a",
+                          backgroundColor: p.banned ? "#0aa36b" : "#ff2e2e",
+                          color: "#fff",
+                        }}
+                      >
+                        {p.banned ? "DÉBANNIR" : "BANNIR"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -276,6 +329,52 @@ export default function DevPage() {
           Rafraîchissement auto toutes les 10s
         </p>
       </div>
+
+      {/* Modal de confirmation ban / déban */}
+      {banTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ backgroundColor: "rgba(26,26,26,0.6)" }}
+          onClick={() => !banning && setBanTarget(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white p-7 flex flex-col gap-5"
+            style={{ border: "5px solid #1a1a1a", borderRadius: "16px", boxShadow: "6px 6px 0 #1a1a1a" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-bangers uppercase tracking-widest text-[#1a1a1a] text-center" style={{ fontSize: "30px" }}>
+              {banTarget.banned ? "DÉBANNIR ?" : "BANNIR ?"}
+            </h2>
+            <p className="font-archivo text-sm text-[#1a1a1a]/80 text-center leading-relaxed" style={{ fontWeight: 600 }}>
+              {banTarget.banned ? (
+                <>Redonner l&apos;accès aux parties à <span className="font-archivo-black text-[#1a1a1a]">{banTarget.pseudo}</span> ?</>
+              ) : (
+                <><span className="font-archivo-black text-[#ff2e2e]">{banTarget.pseudo}</span> ne pourra plus rejoindre aucune partie.</>
+              )}
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setBanTarget(null)}
+                disabled={banning}
+                className="flex-1 font-bangers uppercase tracking-widest text-[#1a1a1a] bg-white border-[4px] border-[#1a1a1a] py-2.5 transition-all duration-100 hover:-translate-y-[2px] disabled:opacity-50"
+                style={{ borderRadius: "12px", boxShadow: "0 4px 0 #1a1a1a", fontSize: "17px" }}
+              >
+                ANNULER
+              </button>
+              <button
+                type="button"
+                onClick={confirmBan}
+                disabled={banning}
+                className="flex-1 font-bangers uppercase tracking-widest text-white border-[4px] border-[#1a1a1a] py-2.5 transition-all duration-100 hover:-translate-y-[2px] disabled:opacity-50"
+                style={{ borderRadius: "12px", boxShadow: "0 4px 0 #1a1a1a", fontSize: "17px", backgroundColor: banTarget.banned ? "#0aa36b" : "#ff2e2e" }}
+              >
+                {banning ? "..." : banTarget.banned ? "DÉBANNIR" : "BANNIR"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

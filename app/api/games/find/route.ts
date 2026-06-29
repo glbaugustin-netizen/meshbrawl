@@ -24,6 +24,16 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non connecté' }, { status: 401 })
 
+  // Joueur banni → interdit de rejoindre une partie.
+  const { data: me } = await supabase
+    .from('users')
+    .select('banned')
+    .eq('id', user.id)
+    .single()
+  if (me?.banned) {
+    return NextResponse.json({ error: 'Compte banni' }, { status: 403 })
+  }
+
   // Retire l'utilisateur de toutes ses anciennes parties "waiting" (évite les lobbies fantômes)
   const { data: myGames } = await supabase
     .from('game_players')

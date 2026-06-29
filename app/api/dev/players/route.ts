@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   // non). Sinon : liste des joueurs en ligne (last_seen < 5 min).
   let query = db
     .from('users')
-    .select('id, pseudo, avatar_color, elo, country, parties_jouees, last_seen, twitch')
+    .select('id, pseudo, avatar_color, elo, country, parties_jouees, last_seen, twitch, banned')
 
   if (term) {
     query = query.ilike('pseudo', `%${term}%`).order('elo', { ascending: false }).limit(50)
